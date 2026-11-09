@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --color-paper: #f7f4ef;
+  --color-card: #ffffff;
+
+  --color-ink-50: #f5f4f7;
+  --color-ink-100: #ebe9ef;
+  --color-ink-200: #d7d4de;
+  --color-ink-300: #b6b2c0;
+  --color-ink-400: #8d8899;
+  --color-ink-500: #6b6676;
+  --color-ink-600: #514d5b;
+  --color-ink-700: #3b3843;
+  --color-ink-800: #26242c;
+  --color-ink-900: #16151a;
+
+  --color-accent-50: #f1efff;
+  --color-accent-100: #e4e0ff;
+  --color-accent-200: #cbc3ff;
+  --color-accent-300: #a99bff;
+  --color-accent-400: #8a74ff;
+  --color-accent-500: #6c4dfa;
+  --color-accent-600: #5a36e8;
+  --color-accent-700: #4a2ac2;
+  --color-accent-800: #3b249a;
+  --color-accent-900: #2a1b6b;
+
+  --color-peach-100: #ffeadf;
+  --color-peach-200: #ffd4bf;
+  --color-peach-400: #ff9f73;
+
+  --radius-xl2: 1.25rem;
+  --shadow-soft: 0 1px 2px rgb(22 21 26 / 0.04), 0 8px 24px -8px rgb(22 21 26 / 0.12);
+  --shadow-lift: 0 2px 6px rgb(22 21 26 / 0.06), 0 22px 48px -18px rgb(22 21 26 / 0.28);
+
+  --animate-float: float 6s ease-in-out infinite;
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-6px);
+    }
+  }
+}
+
+html,
+body {
+  background: var(--color-paper);
+  color: var(--color-ink-900);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-accent-200);
+}
+
+.stage-bg {
+  background:
+    radial-gradient(120% 80% at 50% 0%, #ffffff 0%, rgb(255 255 255 / 0) 60%),
+    radial-gradient(90% 60% at 50% 100%, var(--color-peach-100) 0%, rgb(255 234 223 / 0) 70%),
+    linear-gradient(180deg, #efeaf9 0%, #f6efe9 100%);
+}
+
+.stage-bg-dark {
+  background:
+    radial-gradient(80% 60% at 50% 15%, rgb(108 77 250 / 0.28) 0%, rgb(108 77 250 / 0) 70%),
+    radial-gradient(70% 50% at 50% 100%, rgb(255 159 115 / 0.18) 0%, rgb(255 159 115 / 0) 70%),
+    linear-gradient(180deg, #1b1830 0%, #121117 100%);
+}
+
+.checker {
+  background-image: radial-gradient(var(--color-ink-200) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
