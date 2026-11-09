@@ -1,69 +1,92 @@
 import Image from "next/image";
+import Link from "next/link";
+import { ContinueDraft } from "@/components/ContinueDraft";
+import { Logo } from "@/components/ui";
+
+const STEPS = [
+  { title: "Snap a selfie", body: "One clear photo is enough to capture your likeness." },
+  { title: "Style your character", body: "Pick an art style, body type and outfit, then tweak it in plain words." },
+  { title: "Lend it your voice", body: "Read a short script and your avatar speaks with a clone of your voice." },
+  { title: "Share one link", body: "Give it a persona. Anyone with the link can talk to your 3D twin." },
+];
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+    <div className="min-h-dvh overflow-hidden">
+      <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
+        <Logo />
+        <Link href="/create" className="rounded-full bg-ink-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-ink-800">
+          Create yours
+        </Link>
+      </header>
+
+      <main>
+        <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-6 sm:px-6 lg:grid-cols-[1.1fr_1fr] lg:pt-14">
+          <div>
+            <p className="inline-flex items-center gap-2 rounded-full border border-accent-200 bg-accent-50 px-3 py-1 text-xs font-medium text-accent-700">
+              <span className="size-1.5 rounded-full bg-accent-500" /> Selfie to talking 3D avatar
+            </p>
+            <h1 className="mt-5 text-5xl font-semibold leading-[1.02] tracking-tight text-ink-900 sm:text-6xl">
+              Your 3D twin.
+              <br />
+              <span className="text-accent-500">Your voice.</span> One link.
+            </h1>
+            <p className="mt-5 max-w-lg text-lg text-ink-600">
+              Upload a selfie, record a few sentences and choose your look. We build a 3D character that looks like you,
+              speaks like you and chats with anyone who opens your link.
+            </p>
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              <Link
+                href="/create"
+                className="inline-flex h-12 items-center rounded-full bg-accent-500 px-7 text-base font-medium text-white shadow-soft transition hover:bg-accent-600"
+              >
+                Create your avatar
+              </Link>
+              <ContinueDraft />
+            </div>
+            <p className="mt-4 text-xs text-ink-500">Takes about 10 minutes. Visitors always see that they&apos;re talking to an AI.</p>
+          </div>
+
+          <div className="relative mx-auto h-[460px] w-full max-w-[460px] sm:h-[540px]">
+            <div className="absolute inset-x-6 bottom-0 top-10 rounded-[3rem] bg-gradient-to-b from-accent-100 via-peach-100 to-paper" />
             <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
+              src="/examples/animated-2.webp"
+              alt="Example avatar"
+              width={300}
+              height={533}
+              preload
+              className="absolute bottom-4 left-0 h-[86%] w-auto animate-float drop-shadow-xl"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+            <Image
+              src="/examples/animated-1.webp"
+              alt="Example avatar"
+              width={300}
+              height={533}
+              preload
+              className="absolute bottom-0 right-0 h-[92%] w-auto animate-float drop-shadow-xl [animation-delay:-3s]"
+            />
+            <div className="absolute left-1/2 top-4 -translate-x-1/2 rounded-2xl bg-card px-4 py-2.5 text-sm shadow-lift">
+              <span className="text-ink-500">Visitor:</span> What are you working on lately?
+            </div>
+          </div>
+        </section>
+
+        <section className="border-t border-ink-100 bg-card/60">
+          <div className="mx-auto grid max-w-6xl gap-6 px-4 py-14 sm:grid-cols-2 sm:px-6 lg:grid-cols-4">
+            {STEPS.map((s, i) => (
+              <div key={s.title}>
+                <span className="grid size-8 place-items-center rounded-full bg-ink-900 text-sm font-semibold text-white">{i + 1}</span>
+                <h2 className="mt-3 font-semibold text-ink-900">{s.title}</h2>
+                <p className="mt-1 text-sm text-ink-600">{s.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
       </main>
+
+      <footer className="mx-auto max-w-6xl px-4 py-8 text-xs text-ink-400 sm:px-6">
+        Only create avatars of yourself, or of people who have given you permission.
+      </footer>
     </div>
   );
 }

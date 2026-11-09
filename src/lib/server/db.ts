@@ -102,7 +102,8 @@ export function updateAvatar(
 ): AvatarRecord {
   const current = getAvatar(id);
   if (!current) throw new Error(`Avatar ${id} not found`);
-  const next = (mutate(structuredClone(current)) ?? current) as AvatarRecord;
+  const draft = structuredClone(current);
+  const next = (mutate(draft) ?? draft) as AvatarRecord;
   next.updatedAt = Date.now();
   db()
     .prepare("UPDATE avatars SET slug = ?, published = ?, updated_at = ?, data = ? WHERE id = ?")

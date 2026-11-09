@@ -24,8 +24,6 @@ export type PlayerOptions = {
 const TALK_CLIPS = ["talk_open", "talk_right", "agree", "talk_open", "talk_right", "shrug"];
 const ONE_SHOT = new Set(["wave", "agree", "shrug", "talk_open", "talk_right"]);
 
-type SpeechChunk = { buffer: AudioBuffer; index: number };
-
 /**
  * Renders a generated character and brings it to life: animation state
  * machine, procedural look-at, blinks, and audio-driven lip sync.
@@ -62,15 +60,25 @@ export class AvatarPlayer {
 
   private audio: AudioContext | null = null;
   private lipsync: LipSync | null = null;
-  private speechQueue: SpeechChunk[] = [];
-  private pendingDecodes = new Map<number, Promise<AudioBuffer | null>>();
+  private expected = new Set<number>();
+  private ready = new Map<number, AudioBuffer | null>();
+  private replyDone = false;
+  private generation = 0;
   private nextChunk = 0;
   private activeSource: AudioBufferSourceNode | null = null;
   private speechEndTimer: ReturnType<typeof setTimeout> | null = null;
   private speaking = false;
   private gain: GainNode | null = null;
 
-  onSpeakingChange?: (speaking: boolean) => void;
+  private speakingListeners = new Set<(speaking: boolean) => void>();
+
+  /** Subscribe to speaking state changes; returns an unsubscribe function. */
+  onSpeaking(listener: (speaking: boolean) => void) {
+    this.speakingListeners.add(listener);
+    return () => {
+      this.speakingListeners.delete(listener);
+    };
+  }
   /** Developer override for the mouth shape (testing the face rig). */
   debugMouth: { jaw: number; wide: number; round: number } | null = null;
   debugBlink: number | null = null;
@@ -262,9 +270,21 @@ export class AvatarPlayer {
     return "idle";
   }
 
+  private thinkTimer: ReturnType<typeof setTimeout> | null = null;
+
   setMood(mood: AvatarMood, force = false) {
     if (mood === this.mood && !force) return;
     this.mood = mood;
+    if (this.thinkTimer) clearTimeout(this.thinkTimer);
+    this.thinkTimer = null;
+    if (mood === "thinking") {
+      // Only scratch the head if the reply is slow to arrive.
+      this.thinkTimer = setTimeout(() => {
+        this.thinkTimer = null;
+        if (this.mood === "thinking") this.play(this.moodClip(), 0.6);
+      }, 1200);
+      return;
+    }
     if (mood === "talking") {
       if (!this.current || !ONE_SHOT.has(this.current.getClip().name) || force) this.play(this.nextTalkClip(), 0.4);
     } else {
@@ -336,6 +356,11 @@ export class AvatarPlayer {
     if (this.audio.state === "suspended") await this.audio.resume();
   }
 
+  /** Announce that speech chunk `index` is coming (keeps playback in order). */
+  expectSpeech(index: number) {
+    if (index >= this.nextChunk && !this.ready.has(index)) this.expected.add(index);
+  }
+
   /**
    * Queue a chunk of speech. Chunks play strictly in index order even if
    * their audio arrives out of order.
@@ -343,7 +368,9 @@ export class AvatarPlayer {
   enqueueSpeech(url: string, index: number) {
     if (!this.audio) return;
     const ctx = this.audio;
-    const decode = fetch(url)
+    const generation = this.generation;
+    this.expected.add(index);
+    fetch(url)
       .then((r) => {
         if (!r.ok) throw new Error(`audio ${r.status}`);
         return r.arrayBuffer();
@@ -352,15 +379,20 @@ export class AvatarPlayer {
       .catch((err) => {
         console.warn("Speech chunk failed", err);
         return null;
+      })
+      .then((buffer) => {
+        if (generation !== this.generation) return;
+        this.expected.delete(index);
+        this.ready.set(index, buffer);
+        this.pump();
       });
-    this.pendingDecodes.set(index, decode);
-    decode.then((buffer) => {
-      if (this.pendingDecodes.get(index) !== decode) return;
-      this.pendingDecodes.delete(index);
-      if (buffer) this.speechQueue.push({ buffer, index });
-      else if (index === this.nextChunk) this.nextChunk++;
-      this.pump();
-    });
+  }
+
+  /** Skip a chunk whose speech could not be produced. */
+  skipSpeech(index: number) {
+    this.expected.delete(index);
+    this.ready.set(index, null);
+    this.pump();
   }
 
   /** Resets the chunk counter for a new reply. */
@@ -371,16 +403,18 @@ export class AvatarPlayer {
 
   private pump() {
     if (!this.audio || !this.lipsync || this.activeSource) return;
-    // skip chunks whose decode failed
-    while (!this.pendingDecodes.has(this.nextChunk) && !this.speechQueue.some((c) => c.index === this.nextChunk)) {
-      if (this.speechQueue.length === 0) return this.finishSpeechSoon();
+    while (this.ready.has(this.nextChunk) && this.ready.get(this.nextChunk) === null) {
+      this.ready.delete(this.nextChunk);
       this.nextChunk++;
     }
-    const i = this.speechQueue.findIndex((c) => c.index === this.nextChunk);
-    if (i < 0) return;
-    const [chunk] = this.speechQueue.splice(i, 1);
+    const buffer = this.ready.get(this.nextChunk);
+    if (!buffer) {
+      if (this.replyDone && this.expected.size === 0 && this.ready.size === 0) this.finishSpeechSoon();
+      return;
+    }
+    this.ready.delete(this.nextChunk);
     const source = this.audio.createBufferSource();
-    source.buffer = chunk.buffer;
+    source.buffer = buffer;
     source.connect(this.lipsync.analyser);
     source.onended = () => {
       if (this.activeSource !== source) return;
@@ -396,22 +430,24 @@ export class AvatarPlayer {
   }
 
   private finishSpeechSoon() {
-    if (this.speechEndTimer || !this.speaking) return;
+    if (this.speechEndTimer) return;
     this.speechEndTimer = setTimeout(() => {
       this.speechEndTimer = null;
-      if (!this.activeSource && this.pendingDecodes.size === 0) this.setSpeaking(false);
-    }, 450);
+      if (!this.activeSource && this.expected.size === 0 && this.ready.size === 0) {
+        this.setSpeaking(false);
+        if (this.mood === "thinking") this.setMood("idle");
+      }
+    }, 350);
   }
 
   /** Called when the server says the reply is complete. */
   endReply() {
-    if (!this.activeSource && this.pendingDecodes.size === 0 && this.speechQueue.length === 0) {
-      this.finishSpeechSoon();
-      if (!this.speaking && this.mood === "thinking") this.setMood("idle");
-    }
+    this.replyDone = true;
+    this.pump();
   }
 
   stopSpeech() {
+    this.generation++;
     if (this.activeSource) {
       this.activeSource.onended = null;
       try {
@@ -419,8 +455,9 @@ export class AvatarPlayer {
       } catch {}
     }
     this.activeSource = null;
-    this.speechQueue = [];
-    this.pendingDecodes.clear();
+    this.expected.clear();
+    this.ready.clear();
+    this.replyDone = false;
     if (this.speechEndTimer) clearTimeout(this.speechEndTimer);
     this.speechEndTimer = null;
     this.setSpeaking(false);
@@ -430,7 +467,7 @@ export class AvatarPlayer {
     if (on === this.speaking) return;
     this.speaking = on;
     this.setMood(on ? "talking" : "idle");
-    this.onSpeakingChange?.(on);
+    for (const l of this.speakingListeners) l(on);
   }
 
   get isSpeaking() {
@@ -595,6 +632,7 @@ export class AvatarPlayer {
 
   dispose() {
     cancelAnimationFrame(this.frame);
+    if (this.thinkTimer) clearTimeout(this.thinkTimer);
     this.resizeObserver.disconnect();
     this.unload();
     this.controls?.dispose();

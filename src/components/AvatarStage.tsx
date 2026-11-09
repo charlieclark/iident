@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FaceRig } from "@/lib/avatar/types";
 import type { AvatarPlayer, Framing } from "@/lib/avatar/player";
 
@@ -31,7 +31,9 @@ export function AvatarStage({
   const playerRef = useRef<AvatarPlayer | null>(null);
   const [loading, setLoading] = useState(true);
   const callbacks = useRef({ onReady, onError });
-  callbacks.current = { onReady, onError };
+  useLayoutEffect(() => {
+    callbacks.current = { onReady, onError };
+  });
 
   useEffect(() => {
     let cancelled = false;

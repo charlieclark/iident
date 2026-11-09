@@ -8,7 +8,7 @@ const env = (name: string, fallback?: string) => process.env[name]?.trim() || fa
  * fal endpoint can be swapped in without code changes.
  */
 export const config = {
-  dataDir: path.resolve(env("DATA_DIR", "./data")!),
+  dataDir: path.resolve(/*turbopackIgnore: true*/ process.cwd(), env("DATA_DIR", "data")!),
   appUrl: env("NEXT_PUBLIC_APP_URL", "http://localhost:3000")!,
 
   falKey: env("FAL_KEY"),

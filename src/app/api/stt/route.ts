@@ -1,0 +1,19 @@
+import { transcribe, uploadToFal } from "@/lib/server/fal";
+import { HttpError, handle, rateLimit } from "@/lib/server/http";
+
+const MAX_BYTES = 10 * 1024 * 1024;
+
+/** Transcribes a short voice message from a visitor. */
+export const POST = handle(async (req: Request) => {
+  rateLimit(req, "stt", 30);
+  const form = await req.formData();
+  const file = form.get("file");
+  if (!(file instanceof File) || file.size === 0) throw new HttpError(400, "No audio received.");
+  if (file.size > MAX_BYTES) throw new HttpError(413, "That recording is too long.");
+  const type = file.type || "audio/webm";
+  const ext = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : type.includes("wav") ? "wav" : "webm";
+  const url = await uploadToFal(Buffer.from(await file.arrayBuffer()), type, `message.${ext}`);
+  const language = typeof form.get("language") === "string" ? String(form.get("language")) : undefined;
+  const text = await transcribe(url, language || undefined);
+  return Response.json({ text });
+});
