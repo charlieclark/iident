@@ -34,14 +34,29 @@ export function startModelJob(avatarId: string, conceptId: string, heightMeters:
   const concept = record?.concepts.find((c) => c.id === conceptId);
   if (!record || !concept) throw new Error("Concept not found");
 
+  // A retry of the same concept after a late-stage failure reuses the mesh
+  // instead of re-sculpting (the slowest step).
+  const prev = record.model;
+  const reuseMesh =
+    prev?.status === "failed" && prev.conceptId === conceptId && prev.heightMeters === heightMeters && !prev.meshReused
+      ? prev.sources?.mesh
+      : undefined;
+
   const now = Date.now();
   updateAvatar(avatarId, (r) => {
     r.selectedConceptId = conceptId;
     r.faceRig = undefined;
-    r.model = { status: "queued", conceptId, heightMeters, startedAt: now, updatedAt: now };
+    r.model = {
+      status: "queued",
+      conceptId,
+      heightMeters,
+      startedAt: now,
+      updatedAt: now,
+      ...(reuseMesh ? { sources: { mesh: reuseMesh }, meshReused: true } : {}),
+    };
   });
 
-  const job = runModelJob(avatarId, concept.url, heightMeters).finally(() => running.delete(avatarId));
+  const job = runModelJob(avatarId, concept.url, heightMeters, reuseMesh).finally(() => running.delete(avatarId));
   running.set(avatarId, job);
   return job;
 }
@@ -49,14 +64,19 @@ export function startModelJob(avatarId: string, conceptId: string, heightMeters:
 const HEARTBEAT_MS = 60_000;
 const STALE_MS = 3 * HEARTBEAT_MS;
 
-async function runModelJob(avatarId: string, conceptUrl: string, heightMeters: number) {
+async function runModelJob(avatarId: string, conceptUrl: string, heightMeters: number, meshUrl?: string) {
   // Heartbeat so other processes (or this one after a restart) can tell a
   // slow job from a dead one.
   const beat = setInterval(() => setJob(avatarId, {}), HEARTBEAT_MS);
   try {
-    setJob(avatarId, { status: "sculpting" });
     const requests: Record<string, string> = {};
-    const mesh = await generateMesh(conceptUrl, (id) => setJob(avatarId, { requests: { ...requests, mesh: (requests.mesh = id) } }));
+    let mesh: { glbUrl: string };
+    if (meshUrl) {
+      mesh = { glbUrl: meshUrl };
+    } else {
+      setJob(avatarId, { status: "sculpting" });
+      mesh = await generateMesh(conceptUrl, (id) => setJob(avatarId, { requests: { ...requests, mesh: (requests.mesh = id) } }));
+    }
     setJob(avatarId, { status: "rigging", sources: { mesh: mesh.glbUrl } });
 
     const rig = await rigAndAnimate({

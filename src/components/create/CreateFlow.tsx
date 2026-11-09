@@ -154,11 +154,23 @@ export function CreateFlow() {
             <BuildStatus avatar={avatar} onOpen={() => goTo(avatar.model?.status === "ready" ? "share" : "look")} />
           </div>
         </div>
-        <div className="flex gap-1 px-4 pb-2 md:hidden">
-          {STEPS.map((s) => (
-            <span key={s.id} className={cx("h-1 flex-1 rounded-full", STEPS.findIndex((x) => x.id === s.id) <= STEPS.findIndex((x) => x.id === step) ? "bg-accent-500" : "bg-ink-200")} />
+        <nav aria-label="Steps" className="flex gap-1 overflow-x-auto px-4 pb-2.5 md:hidden">
+          {STEPS.map((s, i) => (
+            <button
+              key={s.id}
+              type="button"
+              disabled={!reachable(s.id)}
+              onClick={() => goTo(s.id)}
+              aria-current={step === s.id ? "step" : undefined}
+              className={cx(
+                "shrink-0 rounded-full px-3 py-1 text-xs transition-colors disabled:opacity-40",
+                step === s.id ? "bg-ink-900 text-white" : "bg-ink-100 text-ink-600",
+              )}
+            >
+              {i + 1}. {s.label}
+            </button>
           ))}
-        </div>
+        </nav>
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">

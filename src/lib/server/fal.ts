@@ -58,19 +58,25 @@ export async function generateMesh(
   imageUrl: string,
   onEnqueue?: (id: string) => void,
 ): Promise<{ glbUrl: string; thumbnailUrl?: string }> {
-  const out = await run<{ model_glb: FalFile; thumbnail?: FalFile | null }>(
-    config.models.imageTo3d,
-    {
-      image_url: imageUrl,
-      pose_mode: "a-pose",
-      topology: "triangle",
-      target_polycount: 40000,
-      symmetry_mode: "auto",
-      should_texture: true,
-      enable_pbr: false,
-    },
-    { onEnqueue, pollInterval: 3000 },
-  );
+  // Meshy's faster "Smart Topology" models (t2, t2.5) cap out at 15k triangles
+  // and take fewer options; the standard models get a denser mesh, which
+  // gives the face rig more vertices around the mouth.
+  const smartTopology = /\/t2(\.\d+)?\//.test(config.models.imageTo3d);
+  const input = smartTopology
+    ? { image_url: imageUrl, pose_mode: "a-pose", target_polycount: 15000, should_texture: true }
+    : {
+        image_url: imageUrl,
+        pose_mode: "a-pose",
+        topology: "triangle",
+        target_polycount: 40000,
+        symmetry_mode: "auto",
+        should_texture: true,
+        enable_pbr: false,
+      };
+  const out = await run<{ model_glb: FalFile; thumbnail?: FalFile | null }>(config.models.imageTo3d, input, {
+    onEnqueue,
+    pollInterval: 3000,
+  });
   return { glbUrl: out.model_glb.url, thumbnailUrl: out.thumbnail?.url };
 }
 

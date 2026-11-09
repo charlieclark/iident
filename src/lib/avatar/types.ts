@@ -116,6 +116,8 @@ export type ModelJob = {
   requests?: Record<string, string>;
   /** Intermediate fal URLs, useful for debugging and retries. */
   sources?: Record<string, string>;
+  /** This attempt reused the mesh from a failed attempt (only done once). */
+  meshReused?: boolean;
 };
 
 export type VoiceProfile = {

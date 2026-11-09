@@ -366,7 +366,13 @@ export function LookStep({ avatar, token, onChange, goTo }: StepProps) {
             onClick={build}
             variant="dark"
           >
-            {builtFrom && builtFrom !== selected ? "Rebuild 3D with this look" : builtFrom === selected && avatar.model?.status === "ready" ? "Rebuild 3D" : "Bring it to life in 3D"}
+            {builtFrom && builtFrom !== selected
+              ? "Rebuild 3D with this look"
+              : builtFrom === selected && avatar.model?.status === "failed"
+                ? "Try building again"
+                : builtFrom === selected && avatar.model?.status === "ready"
+                  ? "Rebuild 3D"
+                  : "Bring it to life in 3D"}
           </Button>
           <p className="mt-2 text-center text-xs text-ink-500">
             Building takes a few minutes. You&apos;ll set up your voice and persona meanwhile.
