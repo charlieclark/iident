@@ -3,7 +3,7 @@ import type { AvatarRecord } from "@/lib/avatar/types";
 import { getAvatar, getAvatarBySlug, verifyEditToken } from "@/lib/server/db";
 import { HttpError, handle, rateLimit } from "@/lib/server/http";
 import { SentenceChunker, sanitizeHistory, streamReply } from "@/lib/server/persona";
-import { greetingFor, speakAs } from "@/lib/server/voice";
+import { createSpeaker, greetingFor } from "@/lib/server/voice";
 
 const bodySchema = z.object({
   messages: z.array(z.object({ role: z.string(), content: z.string() })).max(60).default([]),
@@ -28,11 +28,13 @@ function resolveAvatar(req: Request, slug: string, previewId?: string): AvatarRe
  * One conversational turn, streamed as server-sent events:
  *   text   {delta}            reply text as Claude writes it
  *   chunk  {index, text}      a sentence was sent to TTS
- *   audio  {index, url}       that sentence's speech is ready
+ *   pcm    {index, data}      streamed speech (ElevenLabs): base64 16-bit PCM
+ *   pcm_end {index}           that sentence's stream is complete
+ *   audio  {index, url}       a whole clip is ready (MiniMax fallback)
  *   done   {text}             reply finished
  *   error  {message}
- * Speech for each sentence is synthesized in parallel as soon as the
- * sentence completes, so the avatar starts talking before Claude finishes.
+ * Speech for each sentence starts as soon as the sentence completes, so the
+ * avatar starts talking before Claude finishes the reply.
  */
 export const POST = handle(async (req: Request, ctx: RouteContext<"/api/chat/[slug]">) => {
   const { slug } = await ctx.params;
@@ -57,20 +59,8 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/chat/[sl
           closed = true;
         }
       };
-      const speech: Promise<void>[] = [];
-      let index = 0;
-      const say = (text: string) => {
-        const i = index++;
-        send({ type: "chunk", index: i, text });
-        speech.push(
-          speakAs(record, text)
-            .then((a) => send({ type: "audio", index: i, url: a.url, durationMs: a.durationMs }))
-            .catch((err) => {
-              console.error("tts failed", err);
-              send({ type: "audio_error", index: i });
-            }),
-        );
-      };
+      const speaker = await createSpeaker(record, send, req.signal);
+      const say = (text: string) => speaker.say(text);
 
       try {
         if (parsed.data.greet) {
@@ -78,7 +68,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/chat/[sl
           send({ type: "text", delta: text });
           const chunker = new SentenceChunker();
           for (const sentence of [...chunker.push(`${text} `), ...chunker.flush()]) say(sentence);
-          await Promise.all(speech);
+          await speaker.done();
           send({ type: "done", text });
         } else {
           const chunker = new SentenceChunker();
@@ -89,7 +79,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/chat/[sl
             for (const sentence of chunker.push(delta)) say(sentence);
           }
           for (const sentence of chunker.flush()) say(sentence);
-          await Promise.all(speech);
+          await speaker.done();
           send({ type: "done", text: full.trim() });
         }
       } catch (err) {

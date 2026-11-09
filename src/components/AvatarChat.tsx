@@ -76,6 +76,10 @@ export function AvatarChat({ slug, name, player, previewId, token, language, cla
             setMessages((m) => [...m.slice(0, -1), { role: "assistant", content: reply }]);
           } else if (e.type === "chunk") {
             player.expectSpeech(e.index);
+          } else if (e.type === "pcm") {
+            player.pushPcm(e.index, e.data, e.sampleRate);
+          } else if (e.type === "pcm_end") {
+            player.endPcm(e.index);
           } else if (e.type === "audio") {
             player.enqueueSpeech(e.url, e.index);
           } else if (e.type === "audio_error") {
@@ -97,10 +101,14 @@ export function AvatarChat({ slug, name, player, previewId, token, language, cla
 
   async function start() {
     if (!player) return;
-    await player.unlockAudio();
+    // Create the audio context inside the click (autoplay rules) and start
+    // the greeting request right away; UI updates and the wave happen while
+    // the first audio is on its way.
+    const unlocked = player.unlockAudio();
+    const greeting = turn({ greet: true });
     setStarted(true);
     player.wave();
-    await turn({ greet: true });
+    await Promise.all([unlocked, greeting]);
   }
 
   async function send(text: string) {

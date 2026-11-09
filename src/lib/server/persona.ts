@@ -122,25 +122,34 @@ export async function* streamReply(params: {
  */
 export class SentenceChunker {
   private buffer = "";
+  private emitted = 0;
   constructor(
     private minChars = 24,
     private maxChars = 220,
+    /** The first chunk may end at a clause (comma, colon, dash) so speech starts sooner. */
+    private firstMinChars = 18,
   ) {}
 
   push(delta: string): string[] {
     this.buffer += delta;
     const out: string[] = [];
     for (;;) {
-      const match = /[.!?…]+["')\]]*\s+|\n+/.exec(this.buffer.slice(this.minChars - 1));
-      let cut = match ? this.minChars - 1 + match.index + match[0].length : -1;
+      const first = this.emitted === 0;
+      const min = first ? this.firstMinChars : this.minChars;
+      const boundary = first ? /[.!?…]+["')\]]*\s+|[,;:]\s+|\s[–—]\s|\n+/ : /[.!?…]+["')\]]*\s+|\n+/;
+      const match = boundary.exec(this.buffer.slice(min - 1));
+      let cut = match ? min - 1 + match.index + match[0].length : -1;
       if (cut < 0 && this.buffer.length > this.maxChars) {
         const soft = this.buffer.lastIndexOf(", ", this.maxChars);
-        cut = soft > this.minChars ? soft + 2 : this.maxChars;
+        cut = soft > min ? soft + 2 : this.maxChars;
       }
       if (cut < 0) break;
       const piece = this.buffer.slice(0, cut).trim();
       this.buffer = this.buffer.slice(cut);
-      if (piece) out.push(piece);
+      if (piece) {
+        out.push(piece);
+        this.emitted++;
+      }
     }
     return out;
   }
@@ -148,6 +157,8 @@ export class SentenceChunker {
   flush(): string[] {
     const rest = this.buffer.trim();
     this.buffer = "";
-    return rest ? [rest] : [];
+    if (!rest) return [];
+    this.emitted++;
+    return [rest];
   }
 }

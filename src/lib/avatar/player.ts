@@ -62,12 +62,13 @@ export class AvatarPlayer {
 
   private audio: AudioContext | null = null;
   private lipsync: LipSync | null = null;
-  private expected = new Set<number>();
-  private ready = new Map<number, AudioBuffer | null>();
+  /** Speech chunks by index: buffers arrive (streamed or whole) and play in order. */
+  private segments = new Map<number, { buffers: AudioBuffer[]; scheduled: number; ended: boolean }>();
+  private sources = new Set<AudioBufferSourceNode>();
+  private playhead = 0;
   private replyDone = false;
   private generation = 0;
   private nextChunk = 0;
-  private activeSource: AudioBufferSourceNode | null = null;
   private speechEndTimer: ReturnType<typeof setTimeout> | null = null;
   private speaking = false;
   private gain: GainNode | null = null;
@@ -368,18 +369,15 @@ export class AvatarPlayer {
 
   /** Announce that speech chunk `index` is coming (keeps playback in order). */
   expectSpeech(index: number) {
-    if (index >= this.nextChunk && !this.ready.has(index)) this.expected.add(index);
+    if (index >= this.nextChunk) this.segment(index);
   }
 
-  /**
-   * Queue a chunk of speech. Chunks play strictly in index order even if
-   * their audio arrives out of order.
-   */
+  /** Queue a whole clip (MiniMax fallback). Plays in index order even if clips arrive out of order. */
   enqueueSpeech(url: string, index: number) {
     if (!this.audio) return;
     const ctx = this.audio;
     const generation = this.generation;
-    this.expected.add(index);
+    this.segment(index);
     fetch(url)
       .then((r) => {
         if (!r.ok) throw new Error(`audio ${r.status}`);
@@ -392,17 +390,37 @@ export class AvatarPlayer {
       })
       .then((buffer) => {
         if (generation !== this.generation) return;
-        this.expected.delete(index);
-        this.ready.set(index, buffer);
-        this.pump();
+        const seg = this.segment(index);
+        if (buffer) seg.buffers.push(buffer);
+        seg.ended = true;
+        this.schedule();
       });
+  }
+
+  /** Append streamed speech: base64 16-bit little-endian mono PCM. */
+  pushPcm(index: number, base64: string, sampleRate: number) {
+    if (!this.audio) return;
+    const bytes = base64ToBytes(base64);
+    const samples = bytes.length >> 1;
+    if (!samples) return;
+    const buffer = this.audio.createBuffer(1, samples, sampleRate);
+    const channel = buffer.getChannelData(0);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    for (let i = 0; i < samples; i++) channel[i] = view.getInt16(i * 2, true) / 32768;
+    this.segment(index).buffers.push(buffer);
+    this.schedule();
+  }
+
+  /** The stream for chunk `index` is complete. */
+  endPcm(index: number) {
+    this.segment(index).ended = true;
+    this.schedule();
   }
 
   /** Skip a chunk whose speech could not be produced. */
   skipSpeech(index: number) {
-    this.expected.delete(index);
-    this.ready.set(index, null);
-    this.pump();
+    this.segment(index).ended = true;
+    this.schedule();
   }
 
   /** Resets the chunk counter for a new reply. */
@@ -411,63 +429,90 @@ export class AvatarPlayer {
     this.nextChunk = 0;
   }
 
-  private pump() {
-    if (!this.audio || !this.lipsync || this.activeSource) return;
-    while (this.ready.has(this.nextChunk) && this.ready.get(this.nextChunk) === null) {
-      this.ready.delete(this.nextChunk);
-      this.nextChunk++;
+  private segment(index: number) {
+    let seg = this.segments.get(index);
+    if (!seg) {
+      seg = { buffers: [], scheduled: 0, ended: false };
+      this.segments.set(index, seg);
     }
-    const buffer = this.ready.get(this.nextChunk);
-    if (!buffer) {
-      if (this.replyDone && this.expected.size === 0 && this.ready.size === 0) this.finishSpeechSoon();
-      return;
-    }
-    this.ready.delete(this.nextChunk);
-    const source = this.audio.createBufferSource();
-    source.buffer = buffer;
-    source.connect(this.lipsync.analyser);
-    source.onended = () => {
-      if (this.activeSource !== source) return;
-      this.activeSource = null;
-      this.nextChunk++;
-      this.pump();
-    };
-    this.activeSource = source;
-    if (this.speechEndTimer) clearTimeout(this.speechEndTimer);
-    this.speechEndTimer = null;
-    this.setSpeaking(true);
-    source.start();
+    return seg;
   }
 
-  private finishSpeechSoon() {
+  /**
+   * Appends every buffer that can play now to the audio timeline, strictly in
+   * chunk order. Buffers are scheduled back to back on the audio clock, so
+   * streamed PCM plays gaplessly as it arrives.
+   */
+  private schedule() {
+    const ctx = this.audio;
+    if (!ctx || !this.lipsync) return;
+    for (;;) {
+      const seg = this.segments.get(this.nextChunk);
+      if (!seg) break;
+      while (seg.scheduled < seg.buffers.length) {
+        const buffer = seg.buffers[seg.scheduled++];
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(this.lipsync.analyser);
+        // A short lead on the first buffer absorbs network jitter; later
+        // buffers start exactly where the previous one ends.
+        const lead = this.sources.size ? 0.005 : 0.05;
+        const start = Math.max(this.playhead, ctx.currentTime + lead);
+        source.start(start);
+        this.playhead = start + buffer.duration;
+        this.sources.add(source);
+        source.onended = () => {
+          this.sources.delete(source);
+          this.checkSpeechDone();
+        };
+        if (this.speechEndTimer) clearTimeout(this.speechEndTimer);
+        this.speechEndTimer = null;
+        this.setSpeaking(true);
+      }
+      if (!seg.ended) break;
+      seg.buffers = [];
+      this.segments.delete(this.nextChunk);
+      this.nextChunk++;
+    }
+    this.checkSpeechDone();
+  }
+
+  private checkSpeechDone() {
+    if (this.sources.size > 0) return;
+    const pending = [...this.segments.keys()].some((i) => i >= this.nextChunk);
+    if (this.replyDone && !pending) this.finishSpeechSoon(350);
+    // Mid-reply gap (waiting on the next sentence): relax after a moment.
+    else if (this.speaking) this.finishSpeechSoon(1200);
+  }
+
+  private finishSpeechSoon(delay: number) {
     if (this.speechEndTimer) return;
     this.speechEndTimer = setTimeout(() => {
       this.speechEndTimer = null;
-      if (!this.activeSource && this.expected.size === 0 && this.ready.size === 0) {
-        this.setSpeaking(false);
-        if (this.mood === "thinking") this.setMood("idle");
-      }
-    }, 350);
+      if (this.sources.size > 0) return;
+      this.setSpeaking(false);
+      if (this.mood === "thinking" && this.replyDone) this.setMood("idle");
+    }, delay);
   }
 
   /** Called when the server says the reply is complete. */
   endReply() {
     this.replyDone = true;
-    this.pump();
+    this.schedule();
   }
 
   stopSpeech() {
     this.generation++;
-    if (this.activeSource) {
-      this.activeSource.onended = null;
+    for (const source of this.sources) {
+      source.onended = null;
       try {
-        this.activeSource.stop();
+        source.stop();
       } catch {}
     }
-    this.activeSource = null;
-    this.expected.clear();
-    this.ready.clear();
+    this.sources.clear();
+    this.segments.clear();
     this.replyDone = false;
+    this.playhead = 0;
     if (this.speechEndTimer) clearTimeout(this.speechEndTimer);
     this.speechEndTimer = null;
     this.setSpeaking(false);
@@ -650,6 +695,13 @@ export class AvatarPlayer {
     this.renderer.domElement.remove();
     this.audio?.close().catch(() => {});
   }
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
 }
 
 const _q = new THREE.Quaternion();

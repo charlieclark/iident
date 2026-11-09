@@ -48,6 +48,21 @@ describe("sentence chunker", () => {
     expect(out).toEqual(["Hey there! I'm doing great today.", "What about you? I hope all is well"]);
   });
 
+  it("lets the first chunk end at a clause so speech starts sooner", () => {
+    const c = new SentenceChunker();
+    const out = [
+      ...c.push("Honestly, I'm working on a redesign of our booking flow, "),
+      ...c.push("making it work great on phones. Later, "),
+      ...c.push("I want to add maps."),
+      ...c.flush(),
+    ];
+    expect(out).toEqual([
+      "Honestly, I'm working on a redesign of our booking flow,",
+      "making it work great on phones.",
+      "Later, I want to add maps.",
+    ]);
+  });
+
   it("splits very long runs at a comma", () => {
     const c = new SentenceChunker(24, 60);
     const out = c.push("one two three four five six seven, eight nine ten eleven twelve thirteen fourteen");
