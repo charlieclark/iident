@@ -52,18 +52,18 @@ export default function Home() {
             <Image
               src="/examples/animated-2.webp"
               alt="Example avatar"
-              width={300}
-              height={533}
+              width={520}
+              height={858}
               preload
-              className="absolute bottom-4 left-0 h-[86%] w-auto animate-float drop-shadow-xl"
+              className="absolute bottom-6 left-2 h-[80%] w-auto animate-float drop-shadow-xl"
             />
             <Image
               src="/examples/animated-1.webp"
               alt="Example avatar"
-              width={300}
-              height={533}
+              width={497}
+              height={1000}
               preload
-              className="absolute bottom-0 right-0 h-[92%] w-auto animate-float drop-shadow-xl [animation-delay:-3s]"
+              className="absolute bottom-0 right-4 h-[90%] w-auto animate-float drop-shadow-xl [animation-delay:-3s]"
             />
             <div className="absolute left-1/2 top-4 -translate-x-1/2 rounded-2xl bg-card px-4 py-2.5 text-sm shadow-lift">
               <span className="text-ink-500">Visitor:</span> What are you working on lately?

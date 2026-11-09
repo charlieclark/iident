@@ -44,3 +44,4 @@ next-env.d.ts
 /public/dev/
 /data/
 .env*.local
+!.env.example

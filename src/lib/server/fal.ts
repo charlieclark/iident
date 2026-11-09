@@ -162,15 +162,17 @@ export async function speak(params: {
 }
 
 export async function transcribe(audioUrl: string, languageCode?: string): Promise<string> {
-  const out = await run<{ text: string }>(
-    config.models.stt,
-    {
-      audio_url: audioUrl,
-      diarize: false,
-      tag_audio_events: false,
-      ...(languageCode ? { language_code: languageCode } : {}),
-    },
-    { pollInterval: 250 },
-  );
+  const model = config.models.stt;
+  // Whisper-style endpoints (wizper) accept browser WebM recordings; the
+  // ElevenLabs Scribe endpoints need mp3/wav/m4a/ogg/flac/aac.
+  const input = model.includes("wizper")
+    ? { audio_url: audioUrl, task: "transcribe", language: languageCode || "en", chunk_level: "segment" }
+    : {
+        audio_url: audioUrl,
+        diarize: false,
+        tag_audio_events: false,
+        ...(languageCode ? { language_code: languageCode } : {}),
+      };
+  const out = await run<{ text: string }>(model, input, { pollInterval: 250 });
   return (out.text ?? "").trim();
 }

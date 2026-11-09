@@ -9,8 +9,9 @@ export function greetingFor(p: Persona): string {
   const g = p.greeting.trim();
   if (g) return g;
   const name = p.name.trim();
+  const first = name.split(/\s+/)[0];
   return name
-    ? `Hey, I'm ${name}'s AI avatar. Ask me anything about ${name}, or just say hi!`
+    ? `Hey, I'm ${name}'s AI avatar. Ask me anything about ${first}, or just say hi!`
     : "Hey there! I'm an AI avatar. Ask me anything, or just say hi!";
 }
 

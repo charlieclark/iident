@@ -11,7 +11,15 @@ export const POST = handle(async (req: Request) => {
   if (!(file instanceof File) || file.size === 0) throw new HttpError(400, "No audio received.");
   if (file.size > MAX_BYTES) throw new HttpError(413, "That recording is too long.");
   const type = file.type || "audio/webm";
-  const ext = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : type.includes("wav") ? "wav" : "webm";
+  const ext =
+    [
+      ["mpeg", "mp3"],
+      ["mp3", "mp3"],
+      ["mp4", "m4a"],
+      ["m4a", "m4a"],
+      ["ogg", "ogg"],
+      ["wav", "wav"],
+    ].find(([needle]) => type.includes(needle))?.[1] ?? "webm";
   const url = await uploadToFal(Buffer.from(await file.arrayBuffer()), type, `message.${ext}`);
   const language = typeof form.get("language") === "string" ? String(form.get("language")) : undefined;
   const text = await transcribe(url, language || undefined);

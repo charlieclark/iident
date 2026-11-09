@@ -76,7 +76,8 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/chat/[sl
         if (parsed.data.greet) {
           const text = greetingFor(record.persona);
           send({ type: "text", delta: text });
-          say(text);
+          const chunker = new SentenceChunker();
+          for (const sentence of [...chunker.push(`${text} `), ...chunker.flush()]) say(sentence);
           await Promise.all(speech);
           send({ type: "done", text });
         } else {

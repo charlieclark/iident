@@ -20,7 +20,19 @@ export function PublicAvatarView({ avatar }: { avatar: PublicAvatar }) {
         framing="portrait"
         controls
         className="absolute inset-0"
-        onReady={setPlayer}
+        onReady={async (p) => {
+          // Avatars published before their face was rigged get one on the fly.
+          if (!avatar.faceRig) {
+            try {
+              const { computeFaceRig } = await import("@/lib/avatar/faceRigger");
+              const { rig } = await computeFaceRig(p.character!, p.withRestPose);
+              p.applyFaceRig(rig);
+            } catch (err) {
+              console.warn("Face rigging failed", err);
+            }
+          }
+          setPlayer(p);
+        }}
         onError={() => setFailed(true)}
       />
 

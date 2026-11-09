@@ -24,7 +24,7 @@ export const config = {
     rigging: env("FAL_RIGGING_MODEL", "fal-ai/meshy/rigging/multi-animation")!,
     voiceClone: env("FAL_VOICE_CLONE_MODEL", "fal-ai/minimax/voice-clone")!,
     tts: env("FAL_TTS_MODEL", "fal-ai/minimax/speech-2.8-turbo")!,
-    stt: env("FAL_STT_MODEL", "fal-ai/elevenlabs/speech-to-text/scribe-v2")!,
+    stt: env("FAL_STT_MODEL", "fal-ai/wizper")!,
     /** Claude model for the persona's conversation. */
     chat: env("AVATAR_CHAT_MODEL", "claude-opus-5-5")!,
   },

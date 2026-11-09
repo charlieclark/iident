@@ -76,7 +76,8 @@ export async function* streamReply(params: {
   signal?: AbortSignal;
 }): AsyncGenerator<string> {
   if (!config.anthropicKey) {
-    yield `Hi! I'm ${params.persona.name || "this"} avatar, but my conversation brain isn't connected yet. `;
+    const who = params.persona.name.trim() ? `${params.persona.name.trim()}'s` : "an";
+    yield `Hi! I'm ${who} AI avatar, but my conversation brain isn't connected yet. `;
     yield "Add an Anthropic API key to the server settings and I'll be able to chat properly.";
     return;
   }

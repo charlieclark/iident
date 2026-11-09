@@ -13,7 +13,9 @@ import { download, putFile } from "./storage";
  * Progress is persisted on the avatar record so any client can poll it.
  */
 
-const running = new Map<string, Promise<void>>();
+// Kept on globalThis so dev hot reloads don't forget jobs that are still running.
+const g = globalThis as unknown as { __iidentJobs?: Map<string, Promise<void>> };
+const running = (g.__iidentJobs ??= new Map<string, Promise<void>>());
 
 function setJob(avatarId: string, patch: Partial<ModelJob> & { status?: ModelStage }) {
   return updateAvatar(avatarId, (r) => {
@@ -44,18 +46,23 @@ export function startModelJob(avatarId: string, conceptId: string, heightMeters:
   return job;
 }
 
+const HEARTBEAT_MS = 60_000;
+const STALE_MS = 3 * HEARTBEAT_MS;
+
 async function runModelJob(avatarId: string, conceptUrl: string, heightMeters: number) {
+  // Heartbeat so other processes (or this one after a restart) can tell a
+  // slow job from a dead one.
+  const beat = setInterval(() => setJob(avatarId, {}), HEARTBEAT_MS);
   try {
     setJob(avatarId, { status: "sculpting" });
-    const mesh = await generateMesh(conceptUrl, (id) =>
-      setJob(avatarId, { requests: { mesh: id } }),
-    );
+    const requests: Record<string, string> = {};
+    const mesh = await generateMesh(conceptUrl, (id) => setJob(avatarId, { requests: { ...requests, mesh: (requests.mesh = id) } }));
     setJob(avatarId, { status: "rigging", sources: { mesh: mesh.glbUrl } });
 
     const rig = await rigAndAnimate({
       glbUrl: mesh.glbUrl,
       heightMeters,
-      onEnqueue: (id) => setJob(avatarId, { requests: { rig: id } }),
+      onEnqueue: (id) => setJob(avatarId, { requests: { ...requests, rig: (requests.rig = id) } }),
     });
     setJob(avatarId, { status: "finishing", sources: { mesh: mesh.glbUrl, rigged: rig.riggedGlbUrl } });
 
@@ -76,6 +83,8 @@ async function runModelJob(avatarId: string, conceptUrl: string, heightMeters: n
       error: friendlyError(err),
       finishedAt: Date.now(),
     });
+  } finally {
+    clearInterval(beat);
   }
 }
 
@@ -89,15 +98,15 @@ function friendlyError(err: unknown): string {
 }
 
 /**
- * A job marked in-progress that this process is not running was interrupted
- * (server restart or crash). Surface it so the user can retry.
+ * A job marked in-progress whose heartbeat stopped was interrupted (server
+ * restart or crash). Surface it so the user can retry.
  */
 export function reconcileJob(avatarId: string) {
   const record = getAvatar(avatarId);
   const m = record?.model;
   if (!m) return record;
   const active = m.status !== "ready" && m.status !== "failed";
-  if (active && !running.has(avatarId)) {
+  if (active && !running.has(avatarId) && Date.now() - m.updatedAt > STALE_MS) {
     return setJob(avatarId, {
       status: "failed",
       error: "Generation was interrupted. Please try again.",
