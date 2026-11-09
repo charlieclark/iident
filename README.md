@@ -29,6 +29,20 @@ All of it lives in bind-pose geometry space, so it follows the head through ever
 
 **6. Runtime polish** (`src/lib/avatar/player.ts`). Library clips often turn the body away from the camera, so each clip's average hips yaw is measured and removed at load. A head look-at measures the animated head direction every frame and corrects toward the viewer. Clip selection is mood-driven: listening idle, a head-scratch only if a reply takes over 1.2 s, rotating talk gestures while speaking, and a wave on greeting.
 
+## What to expect
+
+Measured while building this, using the default models:
+
+| Step | Time |
+| --- | --- |
+| Two character sheets (Nano Banana 2) | about 11 s |
+| 3D mesh + rig + 8 clips (Meshy) | 3 to 13 min, depending on queue load |
+| Voice clone (MiniMax) | about 19 s |
+| Speech-to-text (Whisper) | about 2.5 s |
+| Speech per sentence (MiniMax Speech 2.8 Turbo) | about 3 to 4 s |
+
+During the 3D build the creator keeps going (voice, persona) and sees a turntable of the sculpted mesh while it is being rigged.
+
 ## Running locally
 
 Requirements: Node 22.13+ (uses the built-in `node:sqlite`).

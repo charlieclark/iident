@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Avatar } from "@/lib/client/api";
+import { AvatarStage } from "@/components/AvatarStage";
 import { cx, Spinner } from "@/components/ui";
 
 export const STAGE_COPY: Record<string, { label: string; detail: string }> = {
@@ -60,6 +61,14 @@ export function BuildCard({ avatar, compact }: { avatar: Avatar; compact?: boole
   const copy = STAGE_COPY[m.status] ?? STAGE_COPY.queued;
   return (
     <div className={cx("rounded-3xl border border-ink-100 bg-card p-4", compact ? "" : "shadow-soft")}>
+      {m.previewUrl && !compact && (
+        <div className="relative -mx-2 -mt-2 mb-3 overflow-hidden rounded-2xl">
+          <AvatarStage modelUrl={m.previewUrl} framing="full" autoRotate className="stage-bg h-64" />
+          <span className="absolute left-3 top-3 rounded-full bg-ink-900/75 px-2 py-0.5 text-[11px] font-medium text-white">
+            Sculpted. Rigging next…
+          </span>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-ink-900">{copy.label}</p>

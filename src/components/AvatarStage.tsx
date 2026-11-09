@@ -10,6 +10,7 @@ type Props = {
   framing?: Framing;
   controls?: boolean;
   blinks?: boolean;
+  autoRotate?: boolean;
   className?: string;
   /** Called once the character is loaded (before a face rig is applied, if none was given). */
   onReady?: (player: AvatarPlayer) => void;
@@ -23,6 +24,7 @@ export function AvatarStage({
   framing = "full",
   controls = true,
   blinks = true,
+  autoRotate = false,
   className,
   onReady,
   onError,
@@ -41,7 +43,7 @@ export function AvatarStage({
     (async () => {
       const { AvatarPlayer } = await import("@/lib/avatar/player");
       if (cancelled || !ref.current) return;
-      player = new AvatarPlayer(ref.current, { framing, controls, blinks });
+      player = new AvatarPlayer(ref.current, { framing, controls, blinks, autoRotate });
       playerRef.current = player;
       try {
         await player.load(modelUrl, { faceRig: faceRig ?? null });

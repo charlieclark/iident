@@ -52,7 +52,26 @@ export const PUT = handle(async (req: Request, ctx: RouteContext<"/api/avatars/[
   let thumbKey: string | undefined;
   if (parsed.data.thumbnail) {
     const png = Buffer.from(parsed.data.thumbnail.split(",")[1], "base64");
-    const webp = await sharp(png).resize(600, 800, { fit: "cover" }).webp({ quality: 86 }).toBuffer();
+    const avatarLayer = await sharp(png).resize(600, 800, { fit: "cover" }).png().toBuffer();
+    // Link previews don't handle transparency well: put the avatar on the
+    // same soft gradient the app uses for its stage.
+    const backdrop = Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800">
+        <defs>
+          <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#efeaf9"/><stop offset="1" stop-color="#ffe3d3"/>
+          </linearGradient>
+          <radialGradient id="r" cx="0.5" cy="0.15" r="0.7">
+            <stop offset="0" stop-color="#ffffff" stop-opacity="0.9"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <rect width="600" height="800" fill="url(#g)"/><rect width="600" height="800" fill="url(#r)"/>
+      </svg>`,
+    );
+    const webp = await sharp(backdrop)
+      .composite([{ input: avatarLayer }])
+      .webp({ quality: 86 })
+      .toBuffer();
     thumbKey = await putFile(id, `thumb-${Date.now().toString(36)}.webp`, webp);
   }
   const updated = updateAvatar(id, (r) => {

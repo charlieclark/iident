@@ -19,6 +19,8 @@ export type PlayerOptions = {
   controls?: boolean;
   /** Paint eyelid blinks (disable for characters wearing glasses). */
   blinks?: boolean;
+  /** Slowly spin the camera around the character (turntable preview). */
+  autoRotate?: boolean;
 };
 
 const TALK_CLIPS = ["talk_open", "talk_right", "agree", "talk_open", "talk_right", "shrug"];
@@ -121,6 +123,12 @@ export class AvatarPlayer {
       this.controls.minAzimuthAngle = -Math.PI * 0.45;
       this.controls.maxAzimuthAngle = Math.PI * 0.45;
       this.controls.addEventListener("start", () => (this.camT = 1));
+      if (options.autoRotate) {
+        this.controls.autoRotate = true;
+        this.controls.autoRotateSpeed = 2.4;
+        this.controls.minAzimuthAngle = -Infinity;
+        this.controls.maxAzimuthAngle = Infinity;
+      }
     }
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -306,8 +314,10 @@ export class AvatarPlayer {
     const aspect = this.camera.aspect || 1;
     const vfov = THREE.MathUtils.degToRad(this.camera.fov);
     if (framing === "portrait") {
-      const span = Math.max(0.62, (h * 0.42) / Math.min(1, aspect * 1.1));
-      target.set(0, this.headHeight - h * 0.08, 0);
+      // Head and shoulders, with the face in the upper part of the frame so
+      // chat UI docked at the bottom doesn't cover it.
+      const span = Math.max(0.92, (h * 0.5) / Math.min(1, aspect * 1.1));
+      target.set(0, this.headHeight - h * 0.07, 0);
       const dist = span / 2 / Math.tan(vfov / 2);
       pos.set(0, target.y + 0.03, dist);
     } else {

@@ -104,6 +104,8 @@ export function ownerView(r: AvatarRecord) {
           finishedAt: r.model.finishedAt ?? null,
           error: r.model.error ?? null,
           url: r.model.file ? fileUrl(r.model.file) : null,
+          /** Unrigged mesh, available while rigging runs (for a turntable preview). */
+          previewUrl: r.model.status !== "ready" && r.model.status !== "failed" ? (r.model.sources?.mesh ?? null) : null,
           clips: r.model.clips ?? [],
           heightMeters: r.model.heightMeters,
         }

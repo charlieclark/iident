@@ -14,27 +14,29 @@ export function PublicAvatarView({ avatar }: { avatar: PublicAvatar }) {
   const { persona } = avatar;
   return (
     <main className="stage-bg-dark relative h-dvh overflow-hidden text-white">
-      <AvatarStage
-        modelUrl={avatar.modelUrl}
-        faceRig={avatar.faceRig}
-        framing="portrait"
-        controls
-        className="absolute inset-0"
-        onReady={async (p) => {
-          // Avatars published before their face was rigged get one on the fly.
-          if (!avatar.faceRig) {
-            try {
-              const { computeFaceRig } = await import("@/lib/avatar/faceRigger");
-              const { rig } = await computeFaceRig(p.character!, p.withRestPose);
-              p.applyFaceRig(rig);
-            } catch (err) {
-              console.warn("Face rigging failed", err);
+      <div className="absolute inset-0">
+        <AvatarStage
+          modelUrl={avatar.modelUrl}
+          faceRig={avatar.faceRig}
+          framing="portrait"
+          controls
+          className="size-full"
+          onReady={async (p) => {
+            // Avatars published before their face was rigged get one on the fly.
+            if (!avatar.faceRig) {
+              try {
+                const { computeFaceRig } = await import("@/lib/avatar/faceRigger");
+                const { rig } = await computeFaceRig(p.character!, p.withRestPose);
+                p.applyFaceRig(rig);
+              } catch (err) {
+                console.warn("Face rigging failed", err);
+              }
             }
-          }
-          setPlayer(p);
-        }}
-        onError={() => setFailed(true)}
-      />
+            setPlayer(p);
+          }}
+          onError={() => setFailed(true)}
+        />
+      </div>
 
       <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-4 p-4 sm:p-6">
         <div className="pointer-events-auto max-w-md">
@@ -46,7 +48,7 @@ export function PublicAvatarView({ avatar }: { avatar: PublicAvatar }) {
           </div>
           {persona.tagline && <p className="mt-1 text-sm text-white/70">{persona.tagline}</p>}
         </div>
-        <Link href="/" className="pointer-events-auto rounded-full bg-white/10 px-3 py-1.5 text-xs text-white/80 backdrop-blur transition hover:bg-white/20">
+        <Link href="/" className="pointer-events-auto shrink-0 whitespace-nowrap rounded-full bg-white/10 px-3 py-1.5 text-xs text-white/80 backdrop-blur transition hover:bg-white/20">
           Make your own
         </Link>
       </header>
