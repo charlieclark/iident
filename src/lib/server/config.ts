@@ -13,6 +13,19 @@ export const config = {
 
   falKey: env("FAL_KEY"),
   anthropicKey: env("ANTHROPIC_API_KEY"),
+  elevenLabsKey: env("ELEVENLABS_API_KEY"),
+
+  /**
+   * Speech provider. ElevenLabs streams audio (first sound in ~250 ms) and is
+   * used whenever a key is set; MiniMax on fal is the fallback, which returns
+   * whole clips through fal's queue (several seconds per sentence).
+   */
+  tts: {
+    provider: (env("TTS_PROVIDER") ?? (env("ELEVENLABS_API_KEY") ? "elevenlabs" : "minimax")) as
+      | "elevenlabs"
+      | "minimax",
+    elevenLabsModel: env("ELEVENLABS_MODEL", "eleven_v4_turbo")!,
+  },
 
   models: {
     /** Selfie + outfit -> full-body character sheet. */

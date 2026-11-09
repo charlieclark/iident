@@ -120,8 +120,12 @@ export type ModelJob = {
   meshReused?: boolean;
 };
 
+export type SpeechProvider = "elevenlabs" | "minimax";
+
 export type VoiceProfile = {
   mode: "clone" | "preset";
+  /** Which service the voice id belongs to. Records from before ElevenLabs support have none (MiniMax). */
+  provider?: SpeechProvider;
   voiceId: string;
   sampleFile?: string;
   sampleUrl?: string;

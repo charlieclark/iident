@@ -3,6 +3,8 @@
 export type ChatEvent =
   | { type: "text"; delta: string }
   | { type: "chunk"; index: number; text: string }
+  | { type: "pcm"; index: number; data: string; sampleRate: number }
+  | { type: "pcm_end"; index: number }
   | { type: "audio"; index: number; url: string; durationMs: number }
   | { type: "audio_error"; index: number }
   | { type: "done"; text: string }

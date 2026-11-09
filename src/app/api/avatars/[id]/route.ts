@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { appearanceSchema } from "@/lib/avatar/options";
-import { updateAvatar } from "@/lib/server/db";
+import { getAvatar, updateAvatar } from "@/lib/server/db";
+import { deleteVoice } from "@/lib/server/elevenlabs";
 import { HttpError, handle, ownerView, requireOwner } from "@/lib/server/http";
 import { reconcileJob } from "@/lib/server/jobs";
+import { activeProvider, presetVoices } from "@/lib/server/voice";
 
 export const GET = handle(async (req: Request, ctx: RouteContext<"/api/avatars/[id]">) => {
   const { id } = await ctx.params;
@@ -37,13 +39,21 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/avatars
   const parsed = patchSchema.safeParse(await req.json());
   if (!parsed.success) throw new HttpError(400, parsed.error.issues[0]?.message ?? "Invalid input");
   const body = parsed.data;
+  if (body.voicePreset && !presetVoices().some((v) => v.id === body.voicePreset)) {
+    throw new HttpError(400, "Unknown voice.");
+  }
+  const previous = getAvatar(id)?.voice;
   const record = updateAvatar(id, (r) => {
     if (body.appearance) r.appearance = body.appearance;
     if (body.persona) r.persona = body.persona;
     if (body.consent !== undefined) r.consent = body.consent;
     if (body.voicePreset) {
-      r.voice = { mode: "preset", voiceId: body.voicePreset, createdAt: Date.now() };
+      r.voice = { mode: "preset", provider: activeProvider(), voiceId: body.voicePreset, createdAt: Date.now() };
     }
   });
+  // Switching to a stock voice frees the old clone's ElevenLabs voice slot.
+  if (body.voicePreset && previous?.provider === "elevenlabs" && previous.mode === "clone") {
+    deleteVoice(previous.voiceId).catch((err) => console.warn("Could not free old voice", err));
+  }
   return Response.json({ avatar: ownerView(record) });
 });

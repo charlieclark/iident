@@ -45,6 +45,10 @@ export function AvatarStage({
       if (cancelled || !ref.current) return;
       player = new AvatarPlayer(ref.current, { framing, controls, blinks, autoRotate });
       playerRef.current = player;
+      // Handy for debugging and browser tests; not exposed in production builds.
+      if (process.env.NODE_ENV === "development") {
+        (window as unknown as { __iidentPlayer?: AvatarPlayer }).__iidentPlayer = player;
+      }
       try {
         await player.load(modelUrl, { faceRig: faceRig ?? null });
         if (cancelled) return;

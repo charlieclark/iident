@@ -12,16 +12,21 @@ const SCRIPT =
   "On a typical day you'll find me juggling a few projects, grabbing a coffee, and probably talking a little too fast. " +
   "Ask me anything you like, and I'll do my best to answer just the way I would in person.";
 
-const PRESETS = [
-  { id: "Friendly_Person", label: "Friendly" },
-  { id: "Calm_Woman", label: "Calm (female)" },
-  { id: "Casual_Guy", label: "Casual (male)" },
-  { id: "Wise_Woman", label: "Wise (female)" },
-  { id: "Deep_Voice_Man", label: "Deep (male)" },
-  { id: "Lively_Girl", label: "Lively (female)" },
-  { id: "Patient_Man", label: "Patient (male)" },
-  { id: "Elegant_Man", label: "Elegant (male)" },
-];
+/** Stock voices come from the server so they match the configured speech provider. */
+function useStockVoices() {
+  const [voices, setVoices] = useState<{ id: string; label: string }[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/voices")
+      .then((r) => r.json())
+      .then((d: { voices: { id: string; label: string }[] }) => alive && setVoices(d.voices))
+      .catch(() => alive && setVoices([]));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return voices;
+}
 
 const MIN_SECONDS = 10;
 const MAX_SECONDS = 60;
@@ -163,6 +168,7 @@ function RecordVoice({ avatar, token, onChange }: { avatar: Avatar; token: strin
       onChange(next);
       setTake(null);
       if (next.voice?.previewUrl) play(next.voice.previewUrl);
+      else api.previewVoice(next.id, token, {}).then((r) => play(r.url)).catch(() => {});
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -263,12 +269,18 @@ function VoicePreviewButton({ avatar, token }: { avatar: Avatar; token: string }
 }
 
 function PresetVoices({ avatar, token, onChange }: { avatar: Avatar; token: string; onChange: (a: Avatar) => void }) {
+  const voices = useStockVoices();
   const [playing, setPlaying] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const current = avatar.voice?.mode === "preset" ? avatar.voice.voiceId : null;
   return (
     <div className="grid gap-2 sm:grid-cols-2">
-      {PRESETS.map((v) => (
+      {voices === null && (
+        <p className="flex items-center gap-2 text-sm text-ink-500">
+          <Spinner className="size-4" /> Loading voices…
+        </p>
+      )}
+      {voices?.map((v) => (
         <div
           key={v.id}
           className={cx(
