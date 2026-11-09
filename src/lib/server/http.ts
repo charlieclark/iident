@@ -93,6 +93,7 @@ export function ownerView(r: AvatarRecord) {
     consent: r.consent,
     appearance: r.appearance,
     persona: r.persona,
+    context: r.context,
     selfieUrl: r.selfie ? fileUrl(r.selfie.file) : null,
     concepts: r.concepts.map((c) => ({ id: c.id, imageUrl: fileUrl(c.file), parentId: c.parentId ?? null })),
     selectedConceptId: r.selectedConceptId ?? null,
@@ -125,7 +126,7 @@ export function publicView(r: AvatarRecord): PublicAvatar | null {
   return {
     id: r.id,
     slug: r.slug,
-    persona: r.persona,
+    persona: { name: r.persona.name, tagline: r.persona.tagline, language: r.persona.language },
     modelUrl: fileUrl(r.model.file),
     heightMeters: r.model.heightMeters,
     clips: r.model.clips ?? [],

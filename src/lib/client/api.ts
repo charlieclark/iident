@@ -1,5 +1,6 @@
 "use client";
 
+import type { AvatarContext } from "@/lib/avatar/context";
 import type { Appearance } from "@/lib/avatar/options";
 import type { FaceRig, Persona } from "@/lib/avatar/types";
 import type { OwnerView } from "@/lib/server/http";
@@ -61,7 +62,7 @@ export const api = {
   patch: (
     id: string,
     token: string,
-    body: { appearance?: Appearance; persona?: Persona; consent?: boolean; voicePreset?: string },
+    body: { appearance?: Appearance; persona?: Persona; context?: AvatarContext; consent?: boolean; voicePreset?: string },
   ) => request<{ avatar: Avatar }>(`/api/avatars/${id}`, { method: "PATCH", token, body: JSON.stringify(body) }),
   uploadSelfie: (id: string, token: string, file: Blob) => {
     const form = new FormData();
