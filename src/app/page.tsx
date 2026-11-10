@@ -3,6 +3,10 @@ import Link from "next/link";
 import { AccountLink } from "@/components/account/AccountLink";
 import { ContinueDraft } from "@/components/ContinueDraft";
 import { Logo } from "@/components/ui";
+// Imported, not served from /public: the address then carries a hash of the
+// picture, so a changed picture is never hidden behind a cached old one.
+import exampleMan from "@/assets/examples/animated-man.webp";
+import exampleWoman from "@/assets/examples/animated-woman.webp";
 
 const STEPS = [
   { title: "Snap a selfie", body: "One clear photo is enough to capture your likeness." },
@@ -57,18 +61,14 @@ export default function Home() {
           <div className="relative mx-auto h-[460px] w-full max-w-[460px] sm:h-[540px]">
             <div className="absolute inset-x-6 bottom-0 top-10 rounded-[3rem] bg-gradient-to-b from-accent-100 via-peach-100 to-paper" />
             <Image
-              src="/examples/house-2.webp"
+              src={exampleMan}
               alt="Example avatar"
-              width={509}
-              height={1000}
               preload
               className="absolute bottom-6 left-2 h-[80%] w-auto animate-float drop-shadow-xl"
             />
             <Image
-              src="/examples/house-1.webp"
+              src={exampleWoman}
               alt="Example avatar"
-              width={479}
-              height={1000}
               preload
               className="absolute bottom-0 right-4 h-[90%] w-auto animate-float drop-shadow-xl [animation-delay:-3s]"
             />
