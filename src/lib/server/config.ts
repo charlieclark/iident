@@ -36,6 +36,12 @@ export const config = {
       | "minimax",
     elevenLabsModel: env("ELEVENLABS_MODEL", "eleven_v4_turbo")!,
     fishModel: env("FISH_MODEL", "s2.1-pro")!,
+    /**
+     * "inline" sends the creator's recording with every request, so nothing
+     * is stored at Fish and there is no limit. "model" saves it once as a
+     * private voice model; Fish caps API-created models by prepaid credit.
+     */
+    fishVoiceMode: env("FISH_VOICE_MODE", "inline") as "inline" | "model",
     /** "balanced" favors time to first audio; "normal" favors stability. */
     fishLatency: env("FISH_LATENCY", "balanced")!,
   },

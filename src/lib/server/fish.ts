@@ -1,14 +1,18 @@
 import "server-only";
+import { encode } from "@msgpack/msgpack";
 import { config, HttpError } from "./config";
 import { PCM_SAMPLE_RATE, wholeSamples } from "./pcm";
 
 /**
  * Fish Audio: voice cloning without voice slots, plus streaming text to speech.
  *
- * A creator's recording is uploaded once as a private "fast" voice model,
- * which is usable right away, and speech refers to it by id. Fish publishes
- * no cap on models or monthly clone quota. The model is only a cache of the
- * recording iident keeps, so one that goes missing is rebuilt from it.
+ * Two ways to speak in a creator's voice:
+ * - inline: the recording and its transcript go with every request, so
+ *   nothing is stored at Fish and there is no limit on voices;
+ * - model: the recording is saved once as a private "fast" voice model and
+ *   referenced by id. Fish caps how many models the API can create by the
+ *   account's prepaid credit. A model is only a cache of the recording
+ *   iident keeps, so one that goes missing is rebuilt from it.
  */
 
 const API = "https://api.fish.audio";
@@ -77,29 +81,41 @@ export async function deleteVoiceModel(id: string) {
   if (!res.ok && res.status !== 404) throw await failure(res, "voice deletion");
 }
 
-type SpeechRequest = { text: string; voiceId: string; signal?: AbortSignal };
+/** A recording and exactly what is said in it, for cloning on each request. */
+export type FishReference = { audio: Uint8Array; text: string };
+
+/** A saved voice model, or a reference sent with the request. */
+export type FishVoice = { modelId: string } | { reference: FishReference };
+
+type SpeechRequest = { text: string; voice: FishVoice; signal?: AbortSignal };
 
 function speechRequest(r: SpeechRequest, format: "pcm" | "mp3"): RequestInit {
+  const body = {
+    text: r.text,
+    format,
+    ...(format === "pcm" ? { sample_rate: PCM_SAMPLE_RATE } : { mp3_bitrate: 64 }),
+    latency: config.tts.fishLatency,
+    normalize: true,
+  };
+  const headers = { authorization: `Bearer ${apiKey()}`, model: config.tts.fishModel };
+  if ("reference" in r.voice) {
+    // Binary reference audio is only accepted as MessagePack.
+    return {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/msgpack" },
+      body: new Uint8Array(encode({ ...body, references: [r.voice.reference] })),
+      signal: r.signal,
+    };
+  }
   return {
     method: "POST",
-    headers: {
-      authorization: `Bearer ${apiKey()}`,
-      "content-type": "application/json",
-      model: config.tts.fishModel,
-    },
-    body: JSON.stringify({
-      text: r.text,
-      reference_id: r.voiceId,
-      format,
-      ...(format === "pcm" ? { sample_rate: PCM_SAMPLE_RATE } : { mp3_bitrate: 64 }),
-      latency: config.tts.fishLatency,
-      normalize: true,
-    }),
+    headers: { ...headers, "content-type": "application/json" },
+    body: JSON.stringify({ ...body, reference_id: r.voice.modelId }),
     signal: r.signal,
   };
 }
 
-/** Streams speech as 16-bit mono PCM at 24 kHz, the same format as the ElevenLabs path, in whole samples. */
+/** Streams speech as 16-bit mono PCM at 24 kHz (the format the ElevenLabs path uses), in whole samples. */
 export async function* streamSpeech(r: SpeechRequest): AsyncGenerator<Uint8Array> {
   const res = await fetch(`${API}/v1/tts`, speechRequest(r, "pcm"));
   if (!res.ok || !res.body) throw await failure(res, "speech");

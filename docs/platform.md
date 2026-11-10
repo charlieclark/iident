@@ -12,7 +12,7 @@ An avatar has three parts:
 
 | Part | What it is | Where it lives |
 | --- | --- | --- |
-| Identity | 3D model, face rig, voice | Built by the creator flow (`model`, `faceRig`, `voice` on the record). Cloned voices are private Fish Audio models rebuilt from the stored recording when needed; stock voices come from ElevenLabs |
+| Identity | 3D model, face rig, voice | Built by the creator flow (`model`, `faceRig`, `voice` on the record). Cloned voices are spoken by Fish Audio from the stored recording; stock voices come from ElevenLabs |
 | Persona | Who it is and how it talks: name, tagline, about, traits, speaking style, topics to avoid, greeting, language | `persona` (`src/lib/avatar/types.ts`) |
 | Context | What it knows and what it can show | `context` (`src/lib/avatar/context.ts`) |
 
@@ -144,7 +144,7 @@ Liinks' visitor AI Chat is a Pro beta. A badge on the page opens a chat panel th
 ### Risks
 
 - **Cost per conversation.** One Claude call per turn plus speech per sentence. It needs per-page monthly caps before it can be part of Pro.
-- **Voices.** Clones live with Fish Audio, which publishes no voice slot limit, so voice cloning scales with the number of avatars instead of an ElevenLabs plan (2,200 slots on Business). Cloning still needs the creator's consent, and it has an off switch (`VOICE_CLONING=off`) that falls back to stock voices.
+- **Voices.** Cloned voices are spoken by Fish Audio straight from the stored recording, sent with each request, so nothing is stored per voice and voice cloning scales with the number of avatars instead of an ElevenLabs plan (2,200 slots on Business). It adds about 0.2 s before the first word compared with an ElevenLabs clone. Cloning still needs the creator's consent, and it has an off switch (`VOICE_CLONING=off`) that falls back to stock voices.
 - **Weight on mobile.** The avatar is about 2 MB plus three.js. Load it only when the visitor opens the chat.
 - **Data ownership.** Transcripts would live in iident; the host should be able to export and delete them per user.
 

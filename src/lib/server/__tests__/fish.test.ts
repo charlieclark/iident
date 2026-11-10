@@ -1,3 +1,4 @@
+import { decode } from "@msgpack/msgpack";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 type Call = { url: string; init: RequestInit };
@@ -72,7 +73,7 @@ describe("Fish Audio client", () => {
   it("streams 24 kHz PCM in whole samples from the model", async () => {
     const calls = mockFetch(() => new Response(chunked([1, 2, 3], [4, 5], [6])));
     const chunks: number[][] = [];
-    for await (const c of fish.streamSpeech({ text: "Hello there.", voiceId: "model-1" })) chunks.push([...c]);
+    for await (const c of fish.streamSpeech({ text: "Hello there.", voice: { modelId: "model-1" } })) chunks.push([...c]);
     expect(chunks).toEqual([[1, 2], [3, 4], [5, 6]]);
     const { url, init } = calls[0];
     expect(url).toBe("https://api.fish.audio/v1/tts");
@@ -87,14 +88,26 @@ describe("Fish Audio client", () => {
     });
   });
 
+  it("sends the recording and its transcript with the request when cloning inline", async () => {
+    const calls = mockFetch(() => new Response(chunked([1, 2])));
+    const reference = { audio: new Uint8Array([9, 8, 7]), text: "This is my voice." };
+    for await (const chunk of fish.streamSpeech({ text: "Hi!", voice: { reference } })) expect([...chunk]).toEqual([1, 2]);
+    const { init } = calls[0];
+    expect((init.headers as Record<string, string>)["content-type"]).toBe("application/msgpack");
+    const body = decode(init.body as Uint8Array) as Record<string, unknown>;
+    expect(body).toMatchObject({ text: "Hi!", format: "pcm", sample_rate: 24000, latency: "balanced" });
+    expect(body.references).toEqual([{ audio: new Uint8Array([9, 8, 7]), text: "This is my voice." }]);
+    expect(body).not.toHaveProperty("reference_id");
+  });
+
   it("tells a missing voice model apart from other failures", async () => {
     mockFetch(() => Response.json({ status: 404, message: "Model not found" }, { status: 404 }));
-    const missing = await fish.speechMp3({ text: "Hi", voiceId: "gone" }).catch((e) => e);
+    const missing = await fish.speechMp3({ text: "Hi", voice: { modelId: "gone" } }).catch((e) => e);
     expect(missing.message).toContain("Model not found");
     expect(fish.isMissingVoice(missing)).toBe(true);
 
     mockFetch(() => Response.json({ status: 402, message: "Insufficient balance" }, { status: 402 }));
-    const broke = await fish.speechMp3({ text: "Hi", voiceId: "model-1" }).catch((e) => e);
+    const broke = await fish.speechMp3({ text: "Hi", voice: { modelId: "model-1" } }).catch((e) => e);
     expect(fish.isMissingVoice(broke)).toBe(false);
   });
 });

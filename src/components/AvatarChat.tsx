@@ -6,6 +6,7 @@ import { api } from "@/lib/client/api";
 import { Recorder } from "@/lib/client/audio";
 import { streamChat, type ChatMessage } from "@/lib/client/chat";
 import type { PublicItem } from "@/lib/avatar/context";
+import { languageCode } from "@/lib/avatar/languages";
 import { ItemCard } from "@/components/ItemCard";
 import { Button, cx, Spinner } from "@/components/ui";
 
@@ -19,19 +20,6 @@ type Props = {
   language?: string;
   className?: string;
   dark?: boolean;
-};
-
-const LANGUAGE_CODES: Record<string, string> = {
-  English: "en",
-  Spanish: "es",
-  French: "fr",
-  German: "de",
-  Portuguese: "pt",
-  Italian: "it",
-  Japanese: "ja",
-  Korean: "ko",
-  Chinese: "zh",
-  Hindi: "hi",
 };
 
 /**
@@ -157,7 +145,7 @@ export function AvatarChat({ slug, name, player, previewId, token, language, cla
       if (blob.size < 2000) return;
       setTranscribing(true);
       try {
-        const { text } = await api.transcribe(blob, language ? LANGUAGE_CODES[language] : undefined);
+        const { text } = await api.transcribe(blob, languageCode(language));
         if (text) await send(text);
         else setError("I didn't catch that. Try again?");
       } catch (e) {
