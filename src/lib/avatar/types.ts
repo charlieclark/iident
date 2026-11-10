@@ -1,3 +1,4 @@
+import type { Backdrop, BackdropView } from "./backdrop";
 import type { AvatarContext } from "./context";
 import type { Appearance } from "./options";
 
@@ -163,6 +164,8 @@ export type AvatarRecord = {
   /** What the avatar knows and can show (see ./context.ts). */
   context: AvatarContext;
   usage?: Usage;
+  /** What sits behind the avatar on its page (see ./backdrop.ts). Midnight when unset. */
+  backdrop?: Backdrop;
 };
 
 /** The subset of a record that is safe to show to anyone with the link. */
@@ -179,4 +182,5 @@ export type PublicAvatar = {
   faceRig: FaceRig | null;
   thumbnailUrl: string | null;
   hasVoice: boolean;
+  backdrop: BackdropView;
 };

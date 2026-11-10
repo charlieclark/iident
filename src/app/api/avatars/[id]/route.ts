@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { backdropChoiceSchema } from "@/lib/avatar/backdrop";
 import { contextSchema } from "@/lib/avatar/context";
 import { appearanceSchema } from "@/lib/avatar/options";
 import { getAvatar, updateAvatar } from "@/lib/server/db";
@@ -29,6 +30,7 @@ const patchSchema = z.object({
   appearance: appearanceSchema.optional(),
   persona: personaSchema.optional(),
   context: contextSchema.optional(),
+  backdrop: backdropChoiceSchema.optional(),
   consent: z.boolean().optional(),
   voicePreset: z.string().max(64).optional(),
 });
@@ -50,6 +52,7 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/avatars
     if (body.appearance) r.appearance = body.appearance;
     if (body.persona) r.persona = body.persona;
     if (body.context) r.context = body.context;
+    if (body.backdrop) r.backdrop = body.backdrop;
     if (body.consent !== undefined) r.consent = body.consent;
     if (body.voicePreset) {
       r.voice = { mode: "preset", provider: activeProvider(), voiceId: body.voicePreset, createdAt: Date.now() };

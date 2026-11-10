@@ -63,6 +63,18 @@ export async function generateCharacterImage(params: {
   return url;
 }
 
+/** Description -> a square backdrop image (cropped to fit any screen). */
+export async function generateBackdrop(prompt: string): Promise<string> {
+  const out = await run<{ images?: FalFile[] }>(
+    config.models.backdrop,
+    { prompt, image_size: { width: 1024, height: 1024 }, num_images: 1, output_format: "jpeg", enable_prompt_expansion: false },
+    { pollInterval: 400 },
+  );
+  const url = out.images?.[0]?.url;
+  if (!url) throw new Error("The image model returned no image");
+  return url;
+}
+
 /** Character sheet -> textured mesh in A-pose (no rig yet). */
 export async function generateMesh(
   imageUrl: string,

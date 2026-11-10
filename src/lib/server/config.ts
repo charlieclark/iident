@@ -72,6 +72,8 @@ export const config = {
     conceptQuality: env("CONCEPT_QUALITY", "high")!,
     /** Quick drafts while trying looks: under a cent and a few seconds each. */
     preview: env("FAL_PREVIEW_MODEL", "blackforestlabs/flux-3/klein/edit-image")!,
+    /** Backdrop scenes from a description (under a cent each). */
+    backdrop: env("FAL_BACKDROP_MODEL", "blackforestlabs/flux-3/klein/text-to-image")!,
     /** Character sheet -> textured A-pose mesh. */
     imageTo3d: env("FAL_IMAGE_TO_3D_MODEL", "meshy/v7.1/image-to-3d")!,
     /** Mesh -> humanoid rig + animation clips. */

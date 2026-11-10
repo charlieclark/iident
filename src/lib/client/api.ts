@@ -1,11 +1,14 @@
 "use client";
 
+import type { z } from "zod";
+import type { backdropChoiceSchema } from "@/lib/avatar/backdrop";
 import type { AvatarContext } from "@/lib/avatar/context";
 import type { Appearance } from "@/lib/avatar/options";
 import type { FaceRig, Persona } from "@/lib/avatar/types";
 import type { OwnerView } from "@/lib/server/http";
 
 export type Avatar = OwnerView;
+export type BackdropChoice = z.infer<typeof backdropChoiceSchema>;
 
 const DRAFTS_KEY = "iident:drafts";
 
@@ -62,8 +65,17 @@ export const api = {
   patch: (
     id: string,
     token: string,
-    body: { appearance?: Appearance; persona?: Persona; context?: AvatarContext; consent?: boolean; voicePreset?: string },
+    body: { appearance?: Appearance; persona?: Persona; context?: AvatarContext; backdrop?: BackdropChoice; consent?: boolean; voicePreset?: string },
   ) => request<{ avatar: Avatar }>(`/api/avatars/${id}`, { method: "PATCH", token, body: JSON.stringify(body) }),
+  /** Uses an uploaded picture as the backdrop. */
+  uploadBackdrop: (id: string, token: string, file: Blob) => {
+    const form = new FormData();
+    form.set("file", file);
+    return request<{ avatar: Avatar }>(`/api/avatars/${id}/backdrop`, { method: "POST", token, body: form });
+  },
+  /** Generates a backdrop scene from a short description. */
+  generateBackdrop: (id: string, token: string, prompt: string) =>
+    request<{ avatar: Avatar }>(`/api/avatars/${id}/backdrop`, { method: "POST", token, body: JSON.stringify({ prompt }) }),
   uploadSelfie: (id: string, token: string, file: Blob) => {
     const form = new FormData();
     form.set("file", file, "selfie.jpg");
