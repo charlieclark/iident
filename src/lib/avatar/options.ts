@@ -12,17 +12,19 @@ import { z } from "zod";
  */
 
 /**
- * The one look every iident character shares: a lead character from a 3D
- * animated film. The face is designed in the same style as the body, which
- * is what the earlier look (a near-photographic face on a figure with a
- * large head) got wrong. See docs/character-pipeline.md for the styles it
- * was picked from.
+ * The one look every iident character shares: an animated film character
+ * with natural proportions. This is the look the product started with.
+ * Later looks traded it for a higher measured face likeness and ended up
+ * with a near-photographic face (uncomfortable on a stylized body, and
+ * creepy on a realistic head); see docs/character-pipeline.md.
  */
-export const STYLE_ID = "film-1";
+export const STYLE_ID = "animated-2";
 
 export const HOUSE_STYLE =
-  "a lead character from a modern 3D animated feature film: appealing simplified shapes, near-natural proportions about six and a half heads tall, " +
-  "slightly enlarged expressive eyes, smooth softly shaded skin with no pores, hair as a few large sculpted clumps, clothing with soft simplified folds";
+  "a modern animated feature film (stylized but grounded proportions, soft clean shading, appealing friendly design)";
+
+/** Stated outright because image models like to enlarge the head of a stylized character. */
+const PROPORTIONS = "Natural adult body proportions with a normal-sized head, about seven and a half heads tall.";
 
 export const BUILDS = [
   { id: "slim", label: "Slim", prompt: "slim, slender build" },
@@ -369,9 +371,10 @@ export function buildConceptPrompt(a: Appearance): string {
     ? "hairline, hairstyle, hair color and any facial hair"
     : "and any facial hair";
   const lines = [
-    `Turn the person in this photo into a full-body 3D character in this style: ${HOUSE_STYLE}.`,
-    "The whole character, the face included, is designed in this one style: do not put a photographic or realistic face on a stylized body.",
-    `Keep the person recognizable the way a good character designer or caricature artist does: translate their face shape, jawline, nose, eye shape and spacing, eyebrows, lips, skin tone, ${hair} into the style, keep what is distinctive about them, and keep details such as glasses, moles, freckles and piercings. Keep their apparent age.`,
+    `Turn the person in this photo into a full-body 3D character in the style of ${HOUSE_STYLE}.`,
+    "The whole character, the face included, is drawn in that one style: no photographic or realistic face.",
+    `Keep them recognizable as this exact person the way a good character designer would: carry their face shape, jawline, nose, eye shape and spacing, eyebrows, lips, skin tone, ${hair} over into the style, keep what is distinctive about them, and keep glasses, moles, freckles and piercings if they have them. Keep their apparent age.`,
+    PROPORTIONS,
   ];
   lines.push(...describeLook(a), POSE_AND_FRAMING);
   return lines.join(" ");

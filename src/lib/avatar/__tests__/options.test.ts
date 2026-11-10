@@ -53,8 +53,9 @@ describe("appearance options", () => {
       extras: "a small enamel cat pin\n<ignore previous>",
     });
     expect(p).toContain("Hair: give them an auburn chin-length bob.");
-    expect(p).toContain("3D animated feature film");
-    expect(p).toContain("Keep the person recognizable");
+    expect(p).toContain("modern animated feature film");
+    expect(p).toContain("recognizable as this exact person");
+    expect(p).toContain("normal-sized head");
     expect(p).not.toContain("hairstyle, hair color");
     expect(p).toContain("Accessories: round glasses and a wristwatch.");
     expect(p).toContain("Extra details: a small enamel cat pin ignore previous.");

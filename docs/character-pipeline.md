@@ -58,7 +58,7 @@ The house style (`HOUSE_STYLE` in `src/lib/avatar/options.ts`) is the five-heads
 
 Net effect on the six test faces: likeness **0.14 before, 0.77 now**, at half the price per final image.
 
-## Second pass: a fully stylized look (the current house style)
+## Second pass: fully stylized looks
 
 The five-heads figure scored well but looked wrong to people: a near-photographic face on a toy body. The likeness score rewards realism, so optimizing for it had pushed the face toward a photo. The second pass asked for the opposite: one style for the whole character, face included, with the person translated into it the way a character designer would.
 
@@ -68,18 +68,39 @@ Six styles, four test faces, GPT Image 2.6 at high quality. "Matched" is how man
 | --- | --- | --- | --- |
 | Five-heads figure (previous) | 0.77 | 6 of 6 | Photo-like face on a stylized body |
 | Painted game hero | 0.40 | 4 of 4 | Closest to realistic, small head |
-| **Animated film character** | 0.23 | 4 of 4 | **House style.** Clearly a character, each person still themselves |
+| Animated film character, 6.5 heads | 0.23 | 4 of 4 | Clearly a character, each person still themselves |
 | Clay puppet | 0.20 | 4 of 4 | Most distinctive; very simple eyes and mouth |
 | Cel-shaded toon | 0.18 | 2 of 4 | Reads as a flat drawing |
 | Soft rounded avatar | 0.12 | 3 of 4 | Faces drift toward one generic face |
 | Vinyl toy | 0.05 | 1 of 4 | Most toy-like, least like the person |
 
-The animated film style (`HOUSE_STYLE`, `STYLE_ID` "film-1") was picked by eye from the sheet. One real build confirmed it converts to 3D, rigs, and that the browser finds the face for lip sync (mouth shapes checked by eye).
+The animated film character and the painted hero were each built in 3D. Neither was liked once rendered: the first still had a large head for its body, and the body proportions of both looked off in motion.
 
-**Sketches changed with it.** Drawing straight from the selfie, the fast model (FLUX.3 klein) loses the person in this style: adults become generic cartoon children, beards disappear, and features named in the prompt (glasses, freckles) get added to people who don't have them. Wording changes and a style reference image did not fix it (the reference's identity leaks in). What works is not asking it to draw the person at all:
+## Third pass: a photorealistic head and shoulders (abandoned)
 
-1. The first sketch is drawn from the selfie by the main model at low quality (about 15 s, $0.02).
-2. Every later sketch is the fast model *restyling that picture* with the new look (`buildSketchEditPrompt`): outfit, build, hair and facial hair all change correctly and the face stays, in 4 to 7 s for under a cent.
+To put all the detail into the face, a head-and-shoulders model was generated from a normalized portrait and given its own runtime: head turning without a skeleton, a modelled mouth interior, eyes redrawn from a picture of themselves (kept on the `claude/talking-head` branch). The static head was the most recognizable result of the whole project. Talking, it was creepy. A face that looks like a photo is judged like a real person, and one moved by simple rules (a picture of an eye being shifted, a mouth cut into a still surface) fails that test however much the details are polished.
+
+## Fourth pass: back to the first look (the current house style)
+
+The look the product started with, an animated film character with natural proportions, turned out to be the one people preferred. Its weakness had been likeness: on Nano Banana 2 the faces were generic. Four ways of drawing it, five test faces:
+
+| | Likeness score | Matched | Notes |
+| --- | --- | --- | --- |
+| 1. Original prompt, Nano Banana 2 | 0.14 | 5 of 6 | Generic faces |
+| 2. New wording, Nano Banana 2 | 0.15 | 4 of 5 | Little change |
+| **3. New wording, Nano Banana 2.1** | 0.18 | 5 of 5 | **House style.** Same cartoon look; keeps beards going grey, age, face shape |
+| 4. New wording, GPT Image 2.6 | 0.62 | 5 of 5 | Ignores the style: near-photographic faces again |
+
+"New wording" is the original style sentence plus: the whole character is drawn in one style, the named features are carried over into it, the apparent age is kept, and the head is a normal size (seven and a half heads tall). Option 3 is the house style (`HOUSE_STYLE`, `STYLE_ID` "animated-2", image model `google/nano-banana-2.1/edit` at about 4 cents and 15 seconds). Two builds confirmed it in 3D next to the very first avatar: same look, more of the person.
+
+The lesson for next time: the likeness score is a guide for comparing models inside one style, not a target. Chasing it leads to realism, and realism is what looked wrong.
+
+## Sketches
+
+Drawing straight from the selfie, the fast model (FLUX.3 klein) loses the person in a cartoon style: adults become generic cartoon children, beards disappear, and features named in the prompt (glasses, freckles) get added to people who don't have them. Wording changes and a style reference image did not fix it (the reference's identity leaks in). What works is not asking it to draw the person at all:
+
+1. The first sketch is drawn from the selfie by the main model (about 15 to 20 s, 4 cents).
+2. Every later sketch is the fast model *restyling that picture* with the new look (`buildSketchEditPrompt`): outfit, build, hair and facial hair all change correctly and the face stays, in 4 to 8 s for under a cent.
 3. Once a final exists, sketches restyle the final instead.
 
 Only pictures the main model drew of the current selfie in the current style are used this way (`sketchBase` in `src/lib/server/concepts.ts`).
@@ -88,5 +109,5 @@ Only pictures the main model drew of the current selfie in the current style are
 
 - Real selfies of real people in poor light or at odd angles.
 - Likeness after the 3D step (one build per style was checked by eye, not scored).
-- The animated film style on more than four faces, and its sketches on real selfies.
+- The current style on more than five faces, and its sketches on real selfies.
 - Passing a tight face crop as a second reference image, which may help further.

@@ -59,7 +59,7 @@ export default function Home() {
             <Image
               src="/examples/house-2.webp"
               alt="Example avatar"
-              width={399}
+              width={509}
               height={1000}
               preload
               className="absolute bottom-6 left-2 h-[80%] w-auto animate-float drop-shadow-xl"
@@ -67,7 +67,7 @@ export default function Home() {
             <Image
               src="/examples/house-1.webp"
               alt="Example avatar"
-              width={411}
+              width={479}
               height={1000}
               preload
               className="absolute bottom-0 right-4 h-[90%] w-auto animate-float drop-shadow-xl [animation-delay:-3s]"

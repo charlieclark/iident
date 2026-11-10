@@ -8,8 +8,8 @@ Where the product stands (November 2026), what it costs to run, how to charge fo
 
 | Step | Cost | Source |
 | --- | --- | --- |
-| Sketches while trying looks (about 10) | $0.10 | first one $0.02, then $0.008 each, fal prices |
-| Final character (1 or 2 renders) | $0.04 to $0.08 | $0.041 each, fal price |
+| Sketches while trying looks (about 10) | $0.11 | first one $0.042, then $0.008 each, fal prices |
+| Final character (1 or 2 renders) | $0.04 to $0.08 | $0.042 each, fal price |
 | 3D mesh with textures | $1.20 | fal price for Meshy 7.1 |
 | Rig plus 8 animation clips | about $1.16 | Meshy's listed add-ons ($0.20 rig, $0.12 a clip); the rigging endpoint doesn't publish its own price |
 | Voice clone | under $0.01 | one transcription; Fish stores nothing |
