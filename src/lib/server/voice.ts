@@ -11,6 +11,7 @@ import {
   transcribe,
   uploadToFal,
 } from "./fal";
+import { brightenWav } from "./brighten";
 import * as fish from "./fish";
 import { PCM_SAMPLE_RATE } from "./pcm";
 import { contentTypeFor, getFile } from "./storage";
@@ -213,7 +214,10 @@ function fishReference(record: AvatarRecord): Promise<fish.FishReference> {
           if (r.voice?.sampleFile === key) r.voice = { ...r.voice, sampleText: saved };
         });
       }
-      return { audio: sample.data, text };
+      // A dull recording gives a dull clone, so its highs are lifted first (the stored file is untouched).
+      const { data, boostDb } = brightenWav(sample.data);
+      if (boostDb) console.info(`Brightened the voice reference of ${record.id} by ${boostDb.toFixed(1)} dB`);
+      return { audio: data, text };
     })();
     references.set(key, reference);
     reference.catch(() => references.delete(key));
@@ -272,6 +276,7 @@ type Speaker = { say(text: string): void; done(): Promise<void> };
 function pcmSpeaker(
   send: (e: SpeechEvent) => void,
   signal: AbortSignal | undefined,
+  sampleRate: number,
   synthesize: (text: string, previousText?: string) => AsyncIterable<Uint8Array>,
 ): Speaker {
   let index = 0;
@@ -286,7 +291,7 @@ function pcmSpeaker(
       chain = chain.then(async () => {
         try {
           for await (const pcm of synthesize(text, previousText)) {
-            send({ type: "pcm", index: i, data: Buffer.from(pcm).toString("base64"), sampleRate: PCM_SAMPLE_RATE });
+            send({ type: "pcm", index: i, data: Buffer.from(pcm).toString("base64"), sampleRate });
           }
         } catch (err) {
           if (!signal?.aborted) console.error("tts failed", err);
@@ -306,11 +311,11 @@ function pcmSpeaker(
 export async function createSpeaker(record: AvatarRecord, send: (e: SpeechEvent) => void, signal?: AbortSignal): Promise<Speaker> {
   const { provider, voiceId } = await resolveVoice(record);
   if (provider === "elevenlabs") {
-    return pcmSpeaker(send, signal, (text, previousText) => eleven.streamSpeech({ text, voiceId, previousText, signal }));
+    return pcmSpeaker(send, signal, PCM_SAMPLE_RATE, (text, previousText) => eleven.streamSpeech({ text, voiceId, previousText, signal }));
   }
   if (provider === "fish") {
     const voice = fishVoice(record, voiceId);
-    return pcmSpeaker(send, signal, (text) => voice.stream(text, signal));
+    return pcmSpeaker(send, signal, config.tts.fishSampleRate, (text) => voice.stream(text, signal));
   }
   let index = 0;
   const pending: Promise<void>[] = [];

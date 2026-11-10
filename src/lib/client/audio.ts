@@ -10,9 +10,15 @@ export class Recorder {
   private data = new Float32Array(1024);
   startedAt = 0;
 
+  constructor(private quality: "speech" | "voice-sample" = "speech") {}
+
   async start() {
+    // Call-style processing (noise suppression, echo cancellation) dulls the
+    // highs, and a voice clone inherits that. Voice samples are captured raw
+    // (levels are normalized in toWav); push-to-talk keeps the processing.
+    const raw = this.quality === "voice-sample";
     this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      audio: { echoCancellation: !raw, noiseSuppression: !raw, autoGainControl: !raw, channelCount: 1 },
     });
     const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find((t) => MediaRecorder.isTypeSupported(t));
     this.recorder = new MediaRecorder(this.stream, mime ? { mimeType: mime } : undefined);
