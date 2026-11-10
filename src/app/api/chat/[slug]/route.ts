@@ -4,6 +4,7 @@ import type { AvatarRecord } from "@/lib/avatar/types";
 import { getAvatar, getAvatarBySlug, verifyEditToken } from "@/lib/server/db";
 import { HttpError, handle, rateLimit } from "@/lib/server/http";
 import { SentenceChunker, sanitizeHistory, streamReply } from "@/lib/server/persona";
+import { countReply, limitMessage, overLimit } from "@/lib/server/usage";
 import { createSpeaker, greetingFor, usesClonedVoice } from "@/lib/server/voice";
 
 const bodySchema = z.object({
@@ -37,6 +38,7 @@ function resolveAvatar(req: Request, slug: string, previewId?: string): AvatarRe
  *   audio  {index, url}       a whole clip is ready (MiniMax fallback)
  *   show   {items}            the avatar put catalog items on screen (cards)
  *   done   {text, shown}      reply finished; `shown` lists the item ids, for the next turn's history
+ *                             (`limited: true` when the avatar is out of replies for the month)
  *   error  {message}
  * Speech for each sentence starts as soon as the sentence completes, so the
  * avatar starts talking before Claude finishes the reply.
@@ -64,6 +66,16 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/chat/[sl
           closed = true;
         }
       };
+      // Out of replies for the month: answer in text only, with no model call or speech to pay for.
+      const preview = !!parsed.data.previewId;
+      if (!parsed.data.greet && !preview && overLimit(record)) {
+        const text = limitMessage(record);
+        send({ type: "text", delta: text });
+        send({ type: "done", text, limited: true });
+        closed = true;
+        controller.close();
+        return;
+      }
       const speaker = await createSpeaker(record, send, req.signal);
       const say = (text: string) => speaker.say(text);
 
@@ -104,6 +116,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/chat/[sl
           }
           for (const sentence of chunker.flush()) say(sentence);
           await speaker.done();
+          if (!preview && full.trim()) countReply(record.id);
           send({ type: "done", text: full.trim(), shown });
         }
       } catch (err) {

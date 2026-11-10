@@ -131,7 +131,7 @@ Speech uses ElevenLabs whenever `ELEVENLABS_API_KEY` is set. `ELEVENLABS_MODEL` 
 - The public page labels the avatar as an AI, and the persona prompt requires it to say so when asked, avoid commitments on the person's behalf, stick to the facts the creator provided and never share private contact, financial or health details.
 - Selfies, voice samples and concept images are only served to the owner (edit token); the public page only exposes the 3D model and a thumbnail.
 - Editing is protected by a random edit token stored in the creator's browser (only its hash is stored server-side).
-- Basic per-IP rate limits protect the expensive endpoints.
+- Basic per-IP rate limits protect the expensive endpoints, and each avatar has a monthly cap on replies to visitors (`MONTHLY_REPLY_LIMIT`, default 300): past it, the avatar answers in text only until the next month.
 
 ## Production notes
 
@@ -140,6 +140,8 @@ Speech uses ElevenLabs whenever `ELEVENLABS_API_KEY` is set. `ELEVENLABS_MODEL` 
 - **Accounts.** Drafts are tied to the browser that created them. Add real auth (and an "edit link" email) before launch.
 - **Costs.** Each avatar uses sketches at under a cent each, one or two final renders at about 4 cents, one image-to-3D run, one rigging run and one voice clone; each reply uses one Claude call (two in the rare case it shows cards before saying anything) and one TTS call per sentence.
 - **Voice cloning at scale.** With `FISH_API_KEY` set, cloned voices are spoken by Fish Audio straight from the creator's recording, which goes with each request, so there is no voice limit and nothing to clean up at Fish. Saved Fish voice models (`FISH_VOICE_MODE=model`) skip re-sending the recording, but Fish caps how many the API can create by prepaid credit (an account with no credit can create none). Fish concurrency also depends on prepaid credit: 5 requests under $100, 15 from $100, 50 from $1,000. Clones made with ElevenLabs instead each take a voice slot for as long as the avatar exists (30 on Creator, 160 on Pro, 660 on Scale, 2,200 on Business, per ElevenLabs' pricing page in November 2026) and count against a monthly quota of new voices (95 on Creator). Stock voices use no slots, and re-recording or switching to a stock voice frees the old clone.
+
+Costs, pricing options and what a new user still trips over are written up in [docs/go-to-market.md](docs/go-to-market.md).
 
 ## Known limitations
 

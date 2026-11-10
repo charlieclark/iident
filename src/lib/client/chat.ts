@@ -10,7 +10,7 @@ export type ChatEvent =
   | { type: "audio"; index: number; url: string; durationMs: number }
   | { type: "audio_error"; index: number }
   | { type: "show"; items: PublicItem[] }
-  | { type: "done"; text: string; shown?: string[] }
+  | { type: "done"; text: string; shown?: string[]; limited?: boolean }
   | { type: "error"; message: string };
 
 export type ChatMessage = {

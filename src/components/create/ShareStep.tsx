@@ -155,6 +155,15 @@ function Ready({ avatar, token, onChange, goTo }: StepProps) {
             </Button>
           </div>
           <p className="text-xs text-ink-500">Changes to the voice and persona go live right away.</p>
+          {avatar.published && (
+            <p className="mt-3 border-t border-ink-100 pt-3 text-xs text-ink-600">
+              <span className="font-medium text-ink-900">{avatar.usage.replies}</span>
+              {avatar.usage.limit > 0 ? ` of ${avatar.usage.limit}` : ""} replies to visitors this month
+              {avatar.usage.limit > 0 && avatar.usage.replies >= avatar.usage.limit && (
+                <span className="text-amber-700"> · limit reached, your avatar answers in text only until next month</span>
+              )}
+            </p>
+          )}
         </Card>
       </aside>
     </div>

@@ -17,6 +17,10 @@ describe("avatar store", () => {
     expect(db.verifyEditToken(record.id, null)).toBe(false);
   });
 
+  it("only makes ids that are valid storage folder names", () => {
+    for (let i = 0; i < 3000; i++) expect(db.newAvatarId()).toMatch(/^[a-zA-Z0-9][a-zA-Z0-9_-]{11}$/);
+  });
+
   it("persists in-place mutations", () => {
     const { record } = db.createAvatar();
     db.updateAvatar(record.id, (r) => {

@@ -3,6 +3,7 @@ import type { AvatarRecord, PublicAvatar } from "@/lib/avatar/types";
 import { HttpError } from "./config";
 import { getAvatar, verifyEditToken } from "./db";
 import { fileUrl } from "./storage";
+import { monthlyReplyLimit, usageOf } from "./usage";
 
 export { HttpError };
 
@@ -87,6 +88,7 @@ export function validateSlug(slug: string): string | null {
 /** What the owner's editor needs (no secrets, files as URLs). */
 export function ownerView(r: AvatarRecord) {
   return {
+    usage: { ...usageOf(r), limit: monthlyReplyLimit() },
     id: r.id,
     slug: r.slug,
     published: r.published,

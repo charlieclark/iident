@@ -53,6 +53,15 @@ export const config = {
    */
   voiceCloning: env("VOICE_CLONING") !== "off",
 
+  limits: {
+    /**
+     * Replies one avatar may give visitors per calendar month; 0 means no
+     * limit. A reply costs roughly 1 to 2 cents (model call plus speech), so
+     * the default caps an avatar at a few dollars a month.
+     */
+    monthlyReplies: Number(env("MONTHLY_REPLY_LIMIT", "300")),
+  },
+
   models: {
     /**
      * Selfie + look -> the final full-body character image the 3D model is
