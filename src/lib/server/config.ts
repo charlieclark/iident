@@ -26,6 +26,23 @@ export const config = {
   },
 
   /**
+   * Payments. With no secret key, billing is off: nothing is paywalled and
+   * the limits below in `limits` apply to every avatar.
+   */
+  stripe: {
+    secretKey: env("STRIPE_SECRET_KEY"),
+    webhookSecret: env("STRIPE_WEBHOOK_SECRET"),
+    apiBase: env("STRIPE_API_BASE", "https://api.stripe.com")!,
+    /** Price ids from the Stripe dashboard. Without them checkout charges the plan's listed price directly. */
+    prices: { creator: env("STRIPE_PRICE_CREATOR"), pro: env("STRIPE_PRICE_PRO") },
+    /** Accounts that get Pro without paying (comma-separated emails). */
+    compEmails: (env("COMP_EMAILS") ?? "")
+      .split(",")
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean),
+  },
+
+  /**
    * Speech providers.
    * - `provider` speaks stock voices. ElevenLabs streams audio (first sound in
    *   ~250 ms) and is used whenever a key is set; MiniMax on fal is the

@@ -1,7 +1,13 @@
 import "server-only";
 import type { AvatarRecord, Usage } from "@/lib/avatar/types";
+import { PLANS } from "@/lib/billing/plans";
+import { userById } from "./auth";
+import { billingEnabled, planOf } from "./billing";
 import { config } from "./config";
-import { updateAvatar } from "./db";
+import { avatarOwner, avatarsOwnedBy, updateAvatar } from "./db";
+import { currentMonth } from "./time";
+
+export { currentMonth };
 
 /**
  * Counts the replies an avatar gives visitors each calendar month (UTC).
@@ -10,7 +16,6 @@ import { updateAvatar } from "./db";
  * greetings are not counted.
  */
 
-export const currentMonth = (now = new Date()) => now.toISOString().slice(0, 7);
 
 /** This month's usage (a new month starts from zero). */
 export function usageOf(record: AvatarRecord, now = new Date()): Usage {
@@ -19,12 +24,27 @@ export function usageOf(record: AvatarRecord, now = new Date()): Usage {
   return { month, replies: u?.month === month ? u.replies : 0, total: u?.total ?? 0 };
 }
 
-export const monthlyReplyLimit = () => config.limits.monthlyReplies;
+/**
+ * The replies an avatar may give this month: the limit (0 = none), how many
+ * count against it so far, and whether the avatar is paused because its
+ * account has no plan.
+ *
+ * With billing on, an avatar that belongs to an account draws on its plan's
+ * allowance, which all of the account's avatars share. Otherwise the
+ * configured default applies to each avatar on its own.
+ */
+export function replyAllowance(record: AvatarRecord, now = new Date()): { limit: number; used: number; paused: boolean } {
+  const ownerId = billingEnabled() ? avatarOwner(record.id) : null;
+  if (!ownerId) return { limit: config.limits.monthlyReplies, used: usageOf(record, now).replies, paused: false };
+  const { replies } = PLANS[planOf(userById(ownerId))];
+  const used = avatarsOwnedBy(ownerId).reduce((n, r) => n + usageOf(r, now).replies, 0);
+  return { limit: replies, used, paused: replies === 0 };
+}
 
-/** Whether the avatar has used up this month's replies. */
+/** Whether the avatar should stop answering with a model call and speech. */
 export function overLimit(record: AvatarRecord, now = new Date()): boolean {
-  const limit = monthlyReplyLimit();
-  return limit > 0 && usageOf(record, now).replies >= limit;
+  const { limit, used, paused } = replyAllowance(record, now);
+  return paused || (limit > 0 && used >= limit);
 }
 
 export function countReply(id: string, now = new Date()) {
@@ -37,5 +57,6 @@ export function countReply(id: string, now = new Date()) {
 /** What the avatar says, in text only, once the month's replies are used up. */
 export function limitMessage(record: AvatarRecord): string {
   const name = record.persona.name.trim();
+  if (replyAllowance(record).paused) return `I'm taking a break right now.${name ? ` You can still reach ${name} directly.` : ""}`;
   return `I've had so many conversations this month that I need to rest my voice until next month.${name ? ` You can still reach ${name} directly.` : ""}`;
 }

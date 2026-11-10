@@ -29,6 +29,9 @@ export function takeNext(): string | null {
   }
 }
 
+/** Whether the account still needs a plan before it can build or publish a 3D avatar. */
+export const needsPlan = (account: Account | undefined) => !!account?.billing.enabled && (!account.user || account.billing.plan === "free");
+
 /** The signed-in account: undefined while loading, `user: null` for a visitor. */
 export function useAccount() {
   const [account, setAccount] = useState<Account | undefined>(undefined);
@@ -36,7 +39,7 @@ export function useAccount() {
     api
       .me()
       .then(setAccount)
-      .catch(() => setAccount({ user: null, avatars: [] }));
+      .catch(() => setAccount({ user: null, avatars: [], billing: { enabled: false } }));
   }, []);
   useEffect(refresh, [refresh]);
   return { account, refresh };

@@ -5,7 +5,7 @@ import { HttpError } from "./config";
 import { canEdit } from "./auth";
 import { getAvatar } from "./db";
 import { fileUrl } from "./storage";
-import { monthlyReplyLimit, usageOf } from "./usage";
+import { replyAllowance, usageOf } from "./usage";
 
 export { HttpError };
 
@@ -93,7 +93,7 @@ export function validateSlug(slug: string): string | null {
 /** What the owner's editor needs (no secrets, files as URLs). */
 export function ownerView(r: AvatarRecord) {
   return {
-    usage: { ...usageOf(r), limit: monthlyReplyLimit() },
+    usage: { ...usageOf(r), ...replyAllowance(r) },
     backdrop: resolveBackdrop(r.backdrop, fileUrl),
     id: r.id,
     slug: r.slug,
@@ -147,7 +147,7 @@ export function summaryView(r: AvatarRecord) {
     building: !!r.model && r.model.status !== "ready" && r.model.status !== "failed",
     imageUrl: r.thumbnail ? fileUrl(r.thumbnail) : concept ? fileUrl(concept.file) : null,
     updatedAt: r.updatedAt,
-    usage: { ...usageOf(r), limit: monthlyReplyLimit() },
+    usage: { ...usageOf(r), ...replyAllowance(r) },
   };
 }
 

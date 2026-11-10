@@ -105,8 +105,10 @@ src/
     page.tsx                  landing page
     create/page.tsx           the five-step creator
     login, auth/verify, me    sign in by email link, and the account's avatars
+    pricing, billing/return   plans, and where Stripe Checkout returns to
     a/[slug]/page.tsx         public avatar page (Open Graph tags, real 404s)
     api/auth/..., api/me      sign-in links, sessions, attaching browser drafts to an account
+    api/billing/...           checkout, confirm on return, billing portal, Stripe webhook
     api/avatars/...           draft CRUD, selfie, concepts, 3D build, face rig, voice, publish
     api/chat/[slug]           SSE conversation: Claude text, streamed speech (PCM), cards to show
     api/voices                stock voices for the active speech provider
@@ -127,6 +129,19 @@ src/
 All model choices are environment variables (see `.env.example`), so newer fal endpoints can be swapped in without code changes. The conversation model defaults to `claude-opus-5-5` with low effort for fast spoken replies and server-side refusal fallbacks enabled; set `AVATAR_CHAT_MODEL` to change it (for example to `claude-haiku-5-5` for lower latency and cost).
 
 Speech uses ElevenLabs whenever `ELEVENLABS_API_KEY` is set. `ELEVENLABS_MODEL` picks the model (default `eleven_v4_turbo`; `eleven_flash_v2_5` is a slightly faster, lower-fidelity alternative at the same price), and `TTS_PROVIDER=minimax` forces the fal fallback for stock voices. Cloned voices go to `CLONE_PROVIDER` (`fish`, `elevenlabs` or `minimax`; Fish by default when `FISH_API_KEY` is set), with `FISH_MODEL` (default `s2.1-pro`), `FISH_LATENCY` (default `balanced`) and `FISH_VOICE_MODE` (`inline`, the default, or `model`). `VOICE_CLONING=off` switches cloning off.
+
+## Plans and payments
+
+Plans live in `src/lib/billing/plans.ts` (Free, Creator at $10 a month, Pro at $29) and everything about Stripe in `src/lib/server/billing.ts`. Billing is on only when `STRIPE_SECRET_KEY` is set; without it nothing is paywalled and `MONTHLY_REPLY_LIMIT` applies to every avatar.
+
+With billing on:
+
+- Designing a character is free. Building it in 3D and publishing it need an account with a plan; the creator sends people to `/pricing`, through sign-in and Stripe Checkout, and back to the avatar they were working on.
+- A plan sets how many avatars can be live, how many replies each gives visitors a month, and how many 3D builds the account gets a month. Retrying a failed build isn't counted.
+- The plan is recorded when the person returns from checkout (the session is read back from Stripe), so it is active at once. The webhook keeps it in step afterwards: renewals, plan changes in the billing portal, failed payments, cancellations.
+- When a plan ends, avatars are kept. Their pages stay up and answer with a short "taking a break" line, with no model call or speech, until the account has a plan again.
+
+Setting up Stripe: set `STRIPE_SECRET_KEY`; add a webhook endpoint at `/api/billing/webhook` for `checkout.session.completed` and `customer.subscription.created`, `.updated` and `.deleted`, and put its signing secret in `STRIPE_WEBHOOK_SECRET`; switch on the customer portal in the Stripe dashboard. Creating two recurring prices and setting `STRIPE_PRICE_CREATOR` and `STRIPE_PRICE_PRO` is optional but needed for people to switch plans in the portal; without them checkout charges the listed price directly and the plan chosen at checkout is kept. `COMP_EMAILS` gives accounts Pro without paying.
 
 ## Safety and privacy
 

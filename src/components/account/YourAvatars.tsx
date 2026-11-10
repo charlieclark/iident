@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { PlanSummary } from "@/components/billing/PlanSummary";
 import { Button, Card, Logo, Spinner } from "@/components/ui";
 import { useAccount } from "@/lib/client/account";
 import { api, type AvatarSummary } from "@/lib/client/api";
 
 function statusOf(a: AvatarSummary): { label: string; className: string } {
+  if (a.published && a.ready && a.usage.paused) return { label: "Paused", className: "bg-amber-50 text-amber-800" };
   if (a.published && a.ready) return { label: "Live", className: "bg-emerald-50 text-emerald-700" };
   if (a.building) return { label: "Building in 3D", className: "bg-accent-50 text-accent-700" };
   if (a.ready) return { label: "Not published", className: "bg-peach-100 text-ink-700" };
@@ -66,6 +68,8 @@ export function YourAvatars() {
           </Link>
         </div>
 
+        <PlanSummary billing={account.billing} />
+
         {account.avatars.length === 0 ? (
           <Card className="mt-8 p-8 text-center">
             <h2 className="text-lg font-semibold text-ink-900">Nothing here yet</h2>
@@ -105,7 +109,10 @@ export function YourAvatars() {
                           <span> · </span>
                           <span>
                             {a.usage.replies}
-                            {a.usage.limit ? ` of ${a.usage.limit}` : ""} replies this month
+                            {a.usage.paused
+                              ? " replies this month · paused, no plan"
+                              : // With plans the allowance is the account's, shown above the list.
+                                `${!account.billing.enabled && a.usage.limit ? ` of ${a.usage.limit}` : ""} replies this month`}
                           </span>
                         </p>
                       ) : (
