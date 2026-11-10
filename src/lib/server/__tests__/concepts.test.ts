@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Concept } from "@/lib/avatar/types";
-import { withConcept } from "../concepts";
+import { STYLE_ID } from "@/lib/avatar/options";
+import { sketchBase, withConcept } from "../concepts";
 import { imageEditInput } from "../fal";
 
 const concept = (id: string, kind?: "preview" | "final"): Concept => ({ id, url: "", file: "", prompt: "", kind, createdAt: 0 });
@@ -15,6 +16,25 @@ describe("character concepts", () => {
     expect(list[0].id).toBe("p9");
   });
 
+  it("sketches from the newest picture the main model drew of the current selfie in the current style", () => {
+    const main = (id: string, over: Partial<Concept> = {}): Concept => ({ ...concept(id, "final"), drawnBy: "main", style: STYLE_ID, selfie: "selfie-a.jpg", ...over });
+    const selfie = { file: "selfie-a.jpg", url: "" };
+    expect(sketchBase({ concepts: [], selfie })).toBeNull();
+    // Pictures from before the current style, of an earlier selfie, or drawn by the sketch model don't count.
+    const others = [concept("legacy", "final"), main("old-style", { style: "figure-0" }), main("old-selfie", { selfie: "selfie-b.jpg" }), main("sketch", { drawnBy: "sketch", kind: "preview" })];
+    expect(sketchBase({ concepts: others, selfie })).toBeNull();
+    expect(sketchBase({ concepts: [...others, main("first", { kind: "preview" }), main("older")], selfie })?.id).toBe("first");
+    expect(sketchBase({ concepts: [main("x")], selfie: undefined })).toBeNull();
+
+    // The picture sketches are made from survives however many sketches follow it.
+    let list: Concept[] = [main("first", { kind: "preview" })];
+    for (let i = 0; i < 10; i++) {
+      const next = main(`s${i}`, { drawnBy: "sketch", kind: "preview" });
+      list = withConcept(list, next, sketchBase({ concepts: [next, ...list], selfie }));
+    }
+    expect(list.map((c) => c.id)).toEqual(["s9", "s8", "s7", "s6", "s5", "s4", "first"]);
+  });
+
   it("shapes requests for each image model family", () => {
     const urls = ["https://example.com/selfie.jpg"];
     expect(imageEditInput("openai/gpt-image-2.6/flare/edit", "p", urls)).toMatchObject({
@@ -23,6 +43,7 @@ describe("character concepts", () => {
       quality: "high",
       reasoning_effort: "low",
     });
+    expect(imageEditInput("openai/gpt-image-2.6/flare/edit", "p", urls, "low")).toMatchObject({ quality: "low" });
     expect(imageEditInput("blackforestlabs/flux-3/klein/edit-image", "p", urls)).toMatchObject({
       image_size: { width: 576, height: 1024 },
       enable_prompt_expansion: false,

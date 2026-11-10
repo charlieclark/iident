@@ -12,17 +12,19 @@ import { z } from "zod";
  */
 
 /**
- * The one look every iident character shares: a collectible figure of the
- * real person, about five heads tall. Chosen from a bake-off (see
- * docs/character-pipeline.md): the larger head gives the image and the 3D
- * mesh more face to work with, the sculpted finish avoids the uncanny look
- * of a photographic face, and it scored highest on face likeness.
+ * The one look every iident character shares: an animated film character
+ * with natural proportions. This is the look the product started with.
+ * Later looks traded it for a higher measured face likeness and ended up
+ * with a near-photographic face (uncomfortable on a stylized body, and
+ * creepy on a realistic head); see docs/character-pipeline.md.
  */
+export const STYLE_ID = "animated-2";
+
 export const HOUSE_STYLE =
-  "a collectible designer figure of the real person, sculpted and rendered in 3D: stylized proportions about five heads tall " +
-  "(a noticeably larger head on a compact body with slightly shortened legs), a faithfully sculpted face with softly stylized " +
-  "smooth matte skin and gently painted detail instead of photographic pores, hair as clean sculpted volumes, clothing with " +
-  "clean simplified folds and matte fabric texture";
+  "a modern animated feature film (stylized but grounded proportions, soft clean shading, appealing friendly design)";
+
+/** Stated outright because image models like to enlarge the head of a stylized character. */
+const PROPORTIONS = "Natural adult body proportions with a normal-sized head, about seven and a half heads tall.";
 
 export const BUILDS = [
   { id: "slim", label: "Slim", prompt: "slim, slender build" },
@@ -362,32 +364,52 @@ export function describeOutfit(a: Appearance): string {
  * rigs well; change it carefully.
  */
 export function buildConceptPrompt(a: Appearance): string {
-  const build = find(BUILDS, a.build);
-  const height = find(HEIGHTS, a.height);
-
-  // Spelling out the features to keep roughly doubled measured face likeness
-  // compared with a general "keep them recognizable".
+  // Naming the features to carry over keeps the person recognizable; asking
+  // for them to be translated into the style, not copied, keeps a realistic
+  // face from being pasted onto a stylized body.
   const hair = a.hair.keep
     ? "hairline, hairstyle, hair color and any facial hair"
     : "and any facial hair";
   const lines = [
-    `Turn the person in this photo into a full-body 3D character in this style: ${HOUSE_STYLE}.`,
-    `Likeness comes first: keep their exact face shape, jawline, nose, eye shape and spacing, eyebrows, lips, skin tone, ${hair}, plus distinguishing details such as glasses, moles, freckles and piercings, so that friends would recognize them instantly. Keep their apparent age and do not beautify or slim the face.`,
+    `Turn the person in this photo into a full-body 3D character in the style of ${HOUSE_STYLE}.`,
+    "The whole character, the face included, is drawn in that one style: no photographic or realistic face.",
+    `Keep them recognizable as this exact person the way a good character designer would: carry their face shape, jawline, nose, eye shape and spacing, eyebrows, lips, skin tone, ${hair} over into the style, keep what is distinctive about them, and keep glasses, moles, freckles and piercings if they have them. Keep their apparent age.`,
+    PROPORTIONS,
   ];
+  lines.push(...describeLook(a), POSE_AND_FRAMING);
+  return lines.join(" ");
+}
+
+/** The parts of a look that are described the same way wherever they are drawn. */
+function describeLook(a: Appearance): string[] {
+  const lines: string[] = [];
   if (!a.hair.keep) {
     lines.push(`Hair: give them ${fixArticles(find(HAIR_STYLES, a.hair.style).prompt.replace("{c}", find(HAIR_COLORS, a.hair.color).name))}.`);
   }
   const facial = find(FACIAL_HAIR, a.facialHair).prompt;
   if (facial) lines.push(`Facial hair: ${facial}.`);
-  lines.push(`Body type: ${build.prompt}, ${height.prompt}.`);
+  lines.push(`Body type: ${find(BUILDS, a.build).prompt}, ${find(HEIGHTS, a.height).prompt}.`);
   lines.push(`Outfit: ${describeOutfit(a)}.`);
   if (a.accessories.length) {
     lines.push(`Accessories: ${joinList(a.accessories.map((id) => find(ACCESSORIES, id).prompt))}.`);
   }
   const extras = sanitizeExtras(a.extras);
   if (extras) lines.push(`Extra details: ${extras}.`);
-  lines.push(POSE_AND_FRAMING);
-  return lines.join(" ");
+  return lines;
+}
+
+/**
+ * Prompt for a quick sketch: the fast model restyles a picture of the
+ * character that already exists, changing only the look. Drawing from the
+ * selfie instead loses the person in this style (it turns adults into
+ * generic cartoon children), while an edit keeps the face it is given.
+ */
+export function buildSketchEditPrompt(a: Appearance): string {
+  return [
+    "Restyle this character. It stays the same character: the same face, skin tone, age, art style, rendering and pose, with everything not listed below unchanged.",
+    ...describeLook(a),
+    POSE_AND_FRAMING,
+  ].join(" ");
 }
 
 const POSE_AND_FRAMING =
@@ -405,7 +427,7 @@ export function buildRefinePrompt(instruction: string): string {
   return (
     `Edit the character in the first image: ${change}. ` +
     "Keep everything else exactly the same: same person, face, identity, art style, proportions and outfit except for the requested change. " +
-    "The second image is a photo of the real person: use it only to keep the face true to them. " +
+    "The second image is a photo of the real person: use it only to keep the character recognizable as them, in the character's own style, never to make the face realistic. " +
     POSE_AND_FRAMING
   );
 }

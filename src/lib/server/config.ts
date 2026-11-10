@@ -98,12 +98,17 @@ export const config = {
 
   models: {
     /**
-     * Selfie + look -> the final full-body character image the 3D model is
-     * built from. GPT Image 2.6 kept faces far better than the alternatives
-     * in a six-face bake-off (docs/character-pipeline.md), in about 25 s.
+     * Selfie + look -> the full-body character image the 3D model is built
+     * from. Nano Banana 2.1 draws the house style as a consistent cartoon
+     * and keeps what is distinctive about the person, in about 15 s. GPT
+     * Image 2.6 scores higher on face likeness but turns the same prompt
+     * into a near-photographic face (docs/character-pipeline.md).
      */
-    concept: env("FAL_CONCEPT_MODEL", "openai/gpt-image-2.6/flare/edit")!,
+    concept: env("FAL_CONCEPT_MODEL", "google/nano-banana-2.1/edit")!,
+    /** Quality settings, for image models that have them (GPT Image). */
     conceptQuality: env("CONCEPT_QUALITY", "high")!,
+    /** The first sketch is drawn from the selfie by the main model, at this quality where it applies. */
+    firstSketchQuality: env("FIRST_SKETCH_QUALITY", "low")!,
     /** Quick drafts while trying looks: under a cent and a few seconds each. */
     preview: env("FAL_PREVIEW_MODEL", "blackforestlabs/flux-3/klein/edit-image")!,
     /** Backdrop scenes from a description (under a cent each). */

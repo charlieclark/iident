@@ -330,7 +330,7 @@ export function LookStep({ avatar, token, onChange, goTo }: StepProps) {
                   ? "Drawing your final character. About 30 seconds."
                   : isFinal
                     ? "Happy with it? Tweak it with words, or bring it to life."
-                    : "Updates as you change things. Your final character will look more like you."}
+                    : "Updates as you change things. Your final character is drawn in more detail."}
               </p>
             </div>
             {drafting && <Spinner className="size-4 text-ink-400" />}
@@ -346,7 +346,7 @@ export function LookStep({ avatar, token, onChange, goTo }: StepProps) {
               />
             ) : (
               <div className="grid size-full animate-pulse place-items-center bg-gradient-to-b from-ink-100 to-ink-50 px-6 text-center text-sm text-ink-500">
-                Sketching you…
+                Drawing you for the first time. This takes about 15 seconds.
               </div>
             )}
             {finalizing && (
