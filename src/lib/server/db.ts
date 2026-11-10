@@ -60,8 +60,20 @@ export function normalizeRecord(stored: StoredRecord): AvatarRecord {
   return { ...stored, persona, context: stored.context ?? { ...EMPTY_CONTEXT, knowledge: knowledge ?? "" } };
 }
 
+/**
+ * Avatar ids double as storage folder names, which must start with a letter
+ * or digit. Random base64url starts with "-" or "_" about 3% of the time, and
+ * every upload for such an avatar used to fail.
+ */
+export function newAvatarId(): string {
+  for (;;) {
+    const id = randomBytes(9).toString("base64url");
+    if (/^[a-zA-Z0-9]/.test(id)) return id;
+  }
+}
+
 export function createAvatar(): { record: AvatarRecord; editToken: string } {
-  const id = randomBytes(9).toString("base64url");
+  const id = newAvatarId();
   const editToken = randomBytes(24).toString("base64url");
   const now = Date.now();
   const record: AvatarRecord = {

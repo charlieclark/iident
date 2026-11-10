@@ -141,6 +141,9 @@ export type VoiceProfile = {
   createdAt: number;
 };
 
+/** Replies given to visitors: this calendar month (UTC, "2026-11") and all time. */
+export type Usage = { month: string; replies: number; total: number };
+
 export type AvatarRecord = {
   id: string;
   slug: string | null;
@@ -159,6 +162,7 @@ export type AvatarRecord = {
   persona: Persona;
   /** What the avatar knows and can show (see ./context.ts). */
   context: AvatarContext;
+  usage?: Usage;
 };
 
 /** The subset of a record that is safe to show to anyone with the link. */
