@@ -41,7 +41,7 @@ export class AvatarPlayer {
   private resizeObserver: ResizeObserver;
 
   private root: THREE.Object3D | null = null;
-  private mesh: THREE.SkinnedMesh | null = null;
+  private mesh: THREE.Mesh | null = null;
   private mixer: THREE.AnimationMixer | null = null;
   private actions = new Map<string, THREE.AnimationAction>();
   private current: THREE.AnimationAction | null = null;
@@ -49,6 +49,18 @@ export class AvatarPlayer {
   private face: FaceDriver | null = null;
   private height = 1.7;
   private headHeight = 1.55;
+  /** A head-and-shoulders model with no skeleton: the head is moved by the face driver instead of bones and clips. */
+  private bust = false;
+  private shadow: THREE.Object3D;
+  private lights: { key: THREE.DirectionalLight; rim: THREE.DirectionalLight; fill: THREE.HemisphereLight; ambient: THREE.AmbientLight };
+
+  private light(l: (typeof LIGHTING)[keyof typeof LIGHTING]) {
+    this.lights.key.intensity = l.key;
+    this.lights.rim.intensity = l.rim;
+    this.lights.fill.intensity = l.fill;
+    this.lights.ambient.intensity = l.ambient;
+    this.scene.environmentIntensity = l.environment;
+  }
 
   private mood: AvatarMood = "idle";
   private framing: Framing;
@@ -104,16 +116,19 @@ export class AvatarPlayer {
 
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    this.scene.environmentIntensity = 0.75;
     pmrem.dispose();
 
-    const key = new THREE.DirectionalLight(0xfff4e8, 1.9);
+    const key = new THREE.DirectionalLight(0xfff4e8, 1);
     key.position.set(1.2, 2.6, 2.4);
-    const rim = new THREE.DirectionalLight(0xdfe8ff, 1.1);
+    const rim = new THREE.DirectionalLight(0xdfe8ff, 1);
     rim.position.set(-1.6, 2.2, -1.8);
-    const fill = new THREE.HemisphereLight(0xffffff, 0xd9cbbd, 0.6);
-    this.scene.add(key, rim, fill);
-    this.scene.add(contactShadow());
+    const fill = new THREE.HemisphereLight(0xffffff, 0xd9cbbd, 1);
+    const ambient = new THREE.AmbientLight(0xffffff, 0);
+    this.lights = { key, rim, fill, ambient };
+    this.light(LIGHTING.figure);
+    this.scene.add(key, rim, fill, ambient);
+    this.shadow = contactShadow();
+    this.scene.add(this.shadow);
 
     if (options.controls) {
       this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -168,11 +183,26 @@ export class AvatarPlayer {
     this.scene.add(root);
     this.root = root;
     this.mesh = findCharacterMesh(root);
+    this.bust = !!this.mesh && !(this.mesh as THREE.SkinnedMesh).isSkinnedMesh && gltf.animations.length === 0 && isBust(root);
+    this.shadow.visible = !this.bust;
+    this.light(this.bust ? LIGHTING.bust : LIGHTING.figure);
+    if (this.bust) {
+      // The renderer's tone mapping is tuned for stylized figures and flattens realistic skin.
+      const mats = Array.isArray(this.mesh!.material) ? this.mesh!.material : [this.mesh!.material];
+      for (const mat of mats) mat.toneMapped = false;
+    }
 
     root.updateMatrixWorld(true);
+    if (this.bust) {
+      // Generated busts come in an arbitrary size: bring them to life size.
+      const size = new THREE.Box3().setFromObject(root, true).getSize(new THREE.Vector3());
+      root.scale.multiplyScalar(BUST_HEIGHT / Math.max(size.y, 1e-6));
+      root.updateMatrixWorld(true);
+    }
     const box = new THREE.Box3().setFromObject(root, true);
-    this.height = Math.max(0.5, box.max.y - box.min.y);
+    this.height = this.bust ? box.max.y - box.min.y : Math.max(0.5, box.max.y - box.min.y);
     root.position.y -= box.min.y;
+    root.position.x -= this.bust ? (box.min.x + box.max.x) / 2 : 0;
     root.updateMatrixWorld(true);
     const head = this.bones.Head ?? this.bones.head;
     this.headHeight = head ? head.getWorldPosition(new THREE.Vector3()).y : this.height * 0.88;
@@ -207,7 +237,12 @@ export class AvatarPlayer {
 
   applyFaceRig(rig: FaceRig) {
     if (!this.mesh || this.face) return;
-    this.face = new FaceDriver(this.mesh, rig, { blinks: this.options.blinks !== false });
+    this.face = new FaceDriver(this.mesh, rig, { blinks: this.options.blinks !== false, headMotion: this.bust });
+  }
+
+  /** Whether the loaded model is a head-and-shoulders bust. */
+  get isBust() {
+    return this.bust;
   }
 
   get hasFace() {
@@ -314,7 +349,13 @@ export class AvatarPlayer {
     const pos = new THREE.Vector3();
     const aspect = this.camera.aspect || 1;
     const vfov = THREE.MathUtils.degToRad(this.camera.fov);
-    if (framing === "portrait") {
+    if (this.bust) {
+      // "portrait" comes in on the face; "full" shows the whole bust.
+      const close = framing === "portrait";
+      const span = (h * (close ? 0.9 : 1.22)) / Math.min(1, aspect * 1.15);
+      target.set(0, h * (close ? 0.63 : 0.52), 0);
+      pos.set(0, target.y + 0.01, span / 2 / Math.tan(vfov / 2));
+    } else if (framing === "portrait") {
       // Head and shoulders, with the face in the upper part of the frame so
       // chat UI docked at the bottom doesn't cover it.
       // Sized from the head itself (head bone to crown), so stylized figures
@@ -341,7 +382,7 @@ export class AvatarPlayer {
       this.camera.lookAt(target);
     }
     if (this.controls) {
-      this.controls.minDistance = framing === "portrait" ? pos.length() * 0.5 : 1.2;
+      this.controls.minDistance = this.bust ? pos.distanceTo(target) * 0.6 : framing === "portrait" ? pos.length() * 0.5 : 1.2;
       this.controls.maxDistance = pos.distanceTo(target) * 1.6 + 0.5;
     }
   }
@@ -536,8 +577,22 @@ export class AvatarPlayer {
 
   private loop = () => {
     this.frame = requestAnimationFrame(this.loop);
-    const dt = Math.min(0.05, this.clock.getDelta());
-    const t = this.clock.elapsedTime;
+    if (this.manualTime !== null) return;
+    this.renderFrame(Math.min(0.05, this.clock.getDelta()), this.clock.elapsedTime);
+  };
+
+  private manualTime: number | null = null;
+
+  /**
+   * Developer tool: stops the real-time loop and advances the avatar by
+   * exactly `dt` seconds per call, for rendering a clip frame by frame.
+   */
+  step(dt: number) {
+    this.manualTime = (this.manualTime ?? this.clock.elapsedTime) + dt;
+    this.renderFrame(dt, this.manualTime);
+  }
+
+  private renderFrame(dt: number, t: number) {
     // Undo last frame's procedural offsets so bones a clip doesn't animate
     // don't accumulate rotation.
     for (const [bone, q] of this.restPose) bone.quaternion.copy(q);
@@ -547,7 +602,7 @@ export class AvatarPlayer {
     this.animateFace(dt, t);
     this.controls?.update();
     this.renderer.render(this.scene, this.camera);
-  };
+  }
 
   private animateCamera(dt: number) {
     if (this.camT >= 1) return;
@@ -639,11 +694,13 @@ export class AvatarPlayer {
     let shape = { jaw: 0, wide: 0, round: 0, level: 0 };
     if (this.lipsync) shape = this.speaking ? this.lipsync.sample() : this.lipsync.rest(dt);
     if (this.debugMouth) shape = { ...this.debugMouth, level: this.debugMouth.jaw };
+    const rise = Math.max(0, shape.level - this.level) / Math.max(dt, 1e-3);
     this.level = shape.level;
     if (!face) return;
     face.state.jaw = shape.jaw;
     face.state.wide = shape.wide;
     face.state.round = shape.round;
+    if (this.bust) this.animateBust(face, dt, t, rise);
 
     // blinks
     const b = this.blink;
@@ -668,6 +725,85 @@ export class AvatarPlayer {
     face.state.blinkLeft = lid;
     face.state.blinkRight = lid;
     face.update();
+  }
+
+  /** Developer override for expressions and head pose on a bust (testing). */
+  debugPose: { smile?: number; brow?: number; yaw?: number; pitch?: number; roll?: number } | null = null;
+  /** Developer override: behave as if speaking (or not) while the mouth is driven by `debugMouth`. */
+  debugSpeaking: boolean | null = null;
+
+  private pose = { yaw: 0, pitch: 0, roll: 0, smile: 0, brow: 0 };
+  private gesture = { yaw: 0, pitch: 0, roll: 0, next: 0 };
+  private stress = 0;
+  private nodAt = 4;
+
+  /**
+   * Head motion and expressions for a head-and-shoulders model. There are no
+   * animation clips, so everything is generated: a slow drift that keeps the
+   * head alive, small dips on stressed syllables and a change of angle every
+   * phrase while talking, raised brows on emphasis, and a posture per mood.
+   */
+  private animateBust(face: FaceDriver, dt: number, t: number, rise: number) {
+    const speaking = this.debugSpeaking ?? this.speaking;
+    const target = { yaw: 0, pitch: 0, roll: 0, smile: 0.08, brow: 0 };
+
+    // Always: slow, slightly irregular drift.
+    target.yaw += 0.03 * Math.sin(t * 0.31 + 1) + 0.016 * Math.sin(t * 0.73);
+    target.pitch += 0.016 * Math.sin(t * 0.41 + 2) + 0.01 * Math.sin(t * 0.93);
+    target.roll += 0.014 * Math.sin(t * 0.27 + 0.5);
+
+    // Follow the viewer a little when they orbit the camera.
+    const toCam = this.camera.position.clone().sub(this.controls?.target ?? this.camTo.target);
+    target.yaw += THREE.MathUtils.clamp(Math.atan2(toCam.x, toCam.z), -0.6, 0.6) * 0.45;
+
+    // Stressed syllables: a quick rise in loudness.
+    this.stress = Math.max(this.stress * Math.exp(-6 * dt), Math.min(1, rise / 9));
+
+    if (speaking) {
+      // A new angle every phrase or so.
+      if (t > this.gesture.next) {
+        this.gesture = {
+          yaw: (Math.random() - 0.5) * 0.16,
+          pitch: (Math.random() - 0.5) * 0.07,
+          roll: (Math.random() - 0.5) * 0.09,
+          next: t + 1.6 + Math.random() * 2.2,
+        };
+      }
+      target.yaw += this.gesture.yaw;
+      target.pitch += this.gesture.pitch - 0.05 * this.stress;
+      target.roll += this.gesture.roll;
+      target.brow += 0.55 * this.stress;
+      target.smile += 0.1;
+    } else if (this.mood === "thinking") {
+      target.yaw += 0.13;
+      target.pitch += 0.07;
+      target.brow += 0.3;
+      target.smile = 0;
+    } else if (this.mood === "listening") {
+      target.roll += 0.045;
+      target.smile += 0.14;
+      target.brow += 0.12;
+      // An occasional nod to show it is following.
+      if (t > this.nodAt + 0.7) this.nodAt = t + 2.5 + Math.random() * 3;
+      if (t > this.nodAt) target.pitch -= 0.07 * Math.sin(((t - this.nodAt) / 0.7) * Math.PI);
+    } else {
+      target.smile += 0.06;
+    }
+
+    const p = this.pose;
+    const ease = (rate: number) => 1 - Math.exp(-rate * dt);
+    p.yaw += (target.yaw - p.yaw) * ease(3.2);
+    p.pitch += (target.pitch - p.pitch) * ease(speaking ? 9 : 3.2);
+    p.roll += (target.roll - p.roll) * ease(2.6);
+    p.smile += (target.smile - p.smile) * ease(4);
+    p.brow += (target.brow - p.brow) * ease(target.brow > p.brow ? 14 : 4);
+
+    const d = this.debugPose;
+    face.state.head.yaw = d?.yaw ?? p.yaw;
+    face.state.head.pitch = d?.pitch ?? p.pitch;
+    face.state.head.roll = d?.roll ?? p.roll;
+    face.state.smile = d?.smile ?? p.smile;
+    face.state.brow = d?.brow ?? p.brow;
   }
 
   /** PNG snapshot of the current view (used for share thumbnails). */
@@ -698,6 +834,27 @@ export class AvatarPlayer {
     this.renderer.domElement.remove();
     this.audio?.close().catch(() => {});
   }
+}
+
+/**
+ * Light levels. A photorealistic bust's texture already carries the soft
+ * light of the portrait it was made from, so it is shown almost as it is:
+ * mostly flat ambient light, with a little key light to give the head some
+ * shape as it turns. The strong key light that shapes a stylized figure
+ * would wash its skin out.
+ */
+const LIGHTING = {
+  figure: { key: 1.9, rim: 1.1, fill: 0.6, environment: 0.75, ambient: 0 },
+  bust: { key: 0.35, rim: 0.1, fill: 0, environment: 0.1, ambient: 2.45 },
+};
+
+/** Height of a head-and-shoulders bust at life size, in metres. */
+const BUST_HEIGHT = 0.46;
+
+/** A model with no skeleton that is about as wide as it is tall is a head and shoulders, not a standing figure. */
+function isBust(root: THREE.Object3D) {
+  const size = new THREE.Box3().setFromObject(root, true).getSize(new THREE.Vector3());
+  return size.y < size.x * 1.4;
 }
 
 function base64ToBytes(b64: string): Uint8Array {

@@ -34,6 +34,10 @@ export type FaceRig = {
   /** Linear-ish sRGB 0..1, sampled from the texture around the face. */
   skinColor: Vec3;
   lipColor: Vec3;
+  /** Eyebrow lines, ordered inner -> outer (rigs made before expressions have none). */
+  brows?: { left: Vec3[]; right: Vec3[] };
+  /** Skin colour of the upper eyelids, used to paint blinks. */
+  lidColor?: Vec3;
 };
 
 export type EyeRig = {

@@ -12,7 +12,12 @@ import type { FaceRig, Vec3 } from "./types";
  *  2. patch the material shader so the region between the lips, which
  *     stretches open when the jaw drops, is painted as a mouth interior with
  *     teeth and tongue;
- *  3. paint eyelids over the eyes during blinks.
+ *  3. paint eyelids over the eyes during blinks;
+ *  4. add expression morph targets: `smile` (corners up and out, cheeks
+ *     lifted) and `brow` (eyebrows raised);
+ *  5. for a head-and-shoulders model, which has no skeleton, turn the head
+ *     in the vertex shader: everything above the neck rotates about a pivot
+ *     behind the jaw, blending to nothing at the shoulders.
  * Everything is expressed in the mesh's bind-pose geometry space, before
  * skinning, so it follows the head through every animation.
  */
@@ -31,6 +36,10 @@ export type FaceState = {
   round: number;
   blinkLeft: number;
   blinkRight: number;
+  smile: number;
+  brow: number;
+  /** Head turn in radians (head-and-shoulders models only): yaw to the viewer's right, pitch up, roll toward the viewer's right shoulder. */
+  head: { yaw: number; pitch: number; roll: number };
 };
 
 type Frame = { c: THREE.Vector3; r: THREE.Vector3; u: THREE.Vector3; f: THREE.Vector3 };
@@ -62,6 +71,14 @@ function sampleContour(frame: Frame, pts: Vec3[], w: number): number[] {
   return out;
 }
 
+function smoothLine(line: number[]): number[] {
+  let out = line;
+  for (let pass = 0; pass < 2; pass++) {
+    out = out.map((y, i) => (i === 0 || i === out.length - 1 ? y : 0.25 * out[i - 1] + 0.5 * y + 0.25 * out[i + 1]));
+  }
+  return out;
+}
+
 function interpLine(line: number[], w: number, x: number) {
   const t = ((x + w) / (2 * w)) * (LINE_SAMPLES - 1);
   const i = Math.min(LINE_SAMPLES - 2, Math.max(0, Math.floor(t)));
@@ -70,22 +87,29 @@ function interpLine(line: number[], w: number, x: number) {
 }
 
 export class FaceDriver {
-  readonly state: FaceState = { jaw: 0, wide: 0, round: 0, blinkLeft: 0, blinkRight: 0 };
+  readonly state: FaceState = { jaw: 0, wide: 0, round: 0, blinkLeft: 0, blinkRight: 0, smile: 0, brow: 0, head: { yaw: 0, pitch: 0, roll: 0 } };
   private uniforms: Record<string, THREE.IUniform>;
-  private morphIndex = { jaw: -1, wide: -1, round: -1 };
+  private morphIndex = { jaw: -1, wide: -1, round: -1, smile: -1, brow: -1 };
+  private frame: Frame;
+  private headMotion: boolean;
 
   constructor(
-    private mesh: THREE.SkinnedMesh,
+    private mesh: THREE.Mesh,
     rig: FaceRig,
-    options: { blinks?: boolean } = {},
+    options: { blinks?: boolean; headMotion?: boolean } = {},
   ) {
     const frame: Frame = { c: v3(rig.mouth.center), r: v3(rig.right), u: v3(rig.up), f: v3(rig.forward) };
+    this.frame = frame;
+    this.headMotion = !!options.headMotion;
     const halfWidth = v3(rig.mouth.left).distanceTo(v3(rig.mouth.right)) / 2;
     const chin = local(frame, v3(rig.chin));
     const chinDepth = Math.max(halfWidth * 1.2, -chin.y);
 
-    const upperLine = sampleContour(frame, rig.mouth.upperInner, halfWidth);
-    const lowerLine = sampleContour(frame, rig.mouth.lowerInner, halfWidth);
+    // The lips are closed in the source picture, so the two inner contours
+    // trace the same seam. Smoothing removes the small kinks of individual
+    // landmarks, which would otherwise show as notches in the open mouth.
+    const upperLine = smoothLine(sampleContour(frame, rig.mouth.upperInner, halfWidth));
+    const lowerLine = smoothLine(sampleContour(frame, rig.mouth.lowerInner, halfWidth));
     const midLine = upperLine.map((y, i) => (y + lowerLine[i]) / 2);
 
     // Jaw hinge: a little above the mouth line and well behind the lips.
@@ -101,15 +125,58 @@ export class FaceDriver {
     const jaw = new Float32Array(count * 3);
     const wide = new Float32Array(count * 3);
     const round = new Float32Array(count * 3);
+    const smile = new Float32Array(count * 3);
+    const brow = new Float32Array(count * 3);
     const p = new THREE.Vector3();
+
+    // Eyes and brows in the mouth frame, for the brow morph.
+    const eyeShape = (eye: FaceRig["eyes"]["left"], line?: Vec3[]) => {
+      const c = local(frame, v3(eye.inner).add(v3(eye.outer)).multiplyScalar(0.5));
+      const half = v3(eye.inner).distanceTo(v3(eye.outer)) / 2;
+      const lidY = Math.max(...eye.upper.map((q) => local(frame, v3(q)).y));
+      const browY = line?.length ? line.reduce((sum, q) => sum + local(frame, v3(q)).y, 0) / line.length : lidY + half * 0.9;
+      return { c, half, lidY, browY: Math.max(browY, lidY + half * 0.4) };
+    };
+    const eyeShapes = [eyeShape(rig.eyes.left, rig.brows?.left), eyeShape(rig.eyes.right, rig.brows?.right)];
+    const put = (target: Float32Array, i: number, dx: number, dy: number, df: number) => {
+      target[i * 3] = frame.r.x * dx + frame.u.x * dy + frame.f.x * df;
+      target[i * 3 + 1] = frame.r.y * dx + frame.u.y * dy + frame.f.y * df;
+      target[i * 3 + 2] = frame.r.z * dx + frame.u.z * dy + frame.f.z * df;
+    };
     const eps = 0.06 * halfWidth;
     const reach = 3.2 * halfWidth;
 
     for (let i = 0; i < count; i++) {
       p.fromBufferAttribute(pos, i);
       const { x, y, z } = local(frame, p);
+
+      // --- brows: the strip from the upper eyelid to above the eyebrow lifts ---
+      for (const e of eyeShapes) {
+        const ex = x - e.c.x;
+        if (Math.abs(ex) > e.half * 3.2 || y < e.lidY || y > e.browY + e.half * 3.5 || Math.abs(z - e.c.z) > e.half * 3) continue;
+        const across = Math.exp(-((ex / (e.half * 1.7)) ** 2));
+        const along = y < e.browY ? smoothstep(e.lidY, e.browY, y) : Math.exp(-(((y - e.browY) / (e.half * 1.4)) ** 2));
+        const g = across * along;
+        if (g > 1e-3) put(brow, i, 0, 0.34 * e.half * g, 0.03 * e.half * g);
+      }
+
       if (Math.abs(x) > reach * 1.4 || z < -2.6 * chinDepth || y > 2 * halfWidth || y < -2.6 * chinDepth) continue;
       const ax = Math.abs(x);
+
+      // --- smile: corners up and out, cheeks lifted ------------------------
+      if (z > -1.2 * chinDepth) {
+        const corner = Math.exp(-(((ax - halfWidth) ** 2 + (y * 1.2) ** 2) / (0.85 * halfWidth) ** 2));
+        const cheek = Math.exp(-(((ax - 1.35 * halfWidth) ** 2 + (y - 1.1 * halfWidth) ** 2) / (0.95 * halfWidth) ** 2));
+        if (corner > 1e-3 || cheek > 1e-3) {
+          put(
+            smile,
+            i,
+            Math.sign(x) * 0.18 * halfWidth * corner,
+            0.2 * halfWidth * corner + 0.06 * halfWidth * cheek,
+            -0.08 * halfWidth * corner + 0.07 * halfWidth * cheek,
+          );
+        }
+      }
 
       // --- jaw ---------------------------------------------------------
       const lineY = interpLine(midLine, halfWidth, THREE.MathUtils.clamp(x, -halfWidth, halfWidth));
@@ -172,11 +239,23 @@ export class FaceDriver {
       new THREE.BufferAttribute(jaw, 3),
       new THREE.BufferAttribute(wide, 3),
       new THREE.BufferAttribute(round, 3),
+      new THREE.BufferAttribute(smile, 3),
+      new THREE.BufferAttribute(brow, 3),
     ];
     geom.morphTargetsRelative = true;
-    this.morphIndex = { jaw: base, wide: base + 1, round: base + 2 };
+    this.morphIndex = { jaw: base, wide: base + 1, round: base + 2, smile: base + 3, brow: base + 4 };
     mesh.updateMorphTargets();
-    mesh.morphTargetInfluences = new Array(base + 3).fill(0);
+    mesh.morphTargetInfluences = new Array(base + 5).fill(0);
+
+    // Head turning: a pivot behind the jaw, and the stretch of neck over which
+    // the turn fades out (heights along the face's up axis, from the mouth).
+    const eyesY = (eyeShapes[0].c.y + eyeShapes[1].c.y) / 2;
+    const faceLength = Math.max(eyesY - chin.y, halfWidth * 2);
+    const headPivot = frame.c
+      .clone()
+      .addScaledVector(frame.u, chin.y + 0.25 * faceLength)
+      .addScaledVector(frame.f, -0.8 * faceLength);
+    const neck = new THREE.Vector2(chin.y - 0.75 * faceLength, chin.y + 0.1 * faceLength);
 
     const eyeUniform = (eye: FaceRig["eyes"]["left"]) => {
       const inner = v3(eye.inner);
@@ -196,6 +275,7 @@ export class FaceDriver {
     const er = eyeUniform(rig.eyes.right);
 
     const skin = new THREE.Color().setRGB(...rig.skinColor, THREE.SRGBColorSpace);
+    const lid = rig.lidColor ? new THREE.Color().setRGB(...rig.lidColor, THREE.SRGBColorSpace) : skin.clone().multiplyScalar(0.93);
     const lip = new THREE.Color().setRGB(...rig.lipColor, THREE.SRGBColorSpace);
 
     this.uniforms = {
@@ -212,6 +292,10 @@ export class FaceDriver {
       uRound: { value: 0 },
       uLipColor: { value: lip },
       uSkinColor: { value: skin },
+      uLidColor: { value: lid },
+      uHeadPivot: { value: headPivot },
+      uHeadRot: { value: new THREE.Matrix3() },
+      uNeck: { value: neck },
       uEyeL: { value: new THREE.Vector4(el.center.x, el.center.y, el.center.z, el.half) },
       uEyeLShape: { value: new THREE.Vector3(el.upper, el.lower, el.slope) },
       uEyeR: { value: new THREE.Vector4(er.center.x, er.center.y, er.center.z, er.half) },
@@ -230,14 +314,32 @@ export class FaceDriver {
     const uniforms = this.uniforms;
     material.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, uniforms);
+      // The fragment shader paints the mouth and eyelids at fixed places on the
+      // face, so it is given the position before expressions and head turns.
+      const { smile, brow } = this.morphIndex;
+      const facePos = `
+vFacePos = transformed;
+#ifdef USE_MORPHTARGETS
+vFacePos -= getMorph(gl_VertexID, ${smile}, 0).xyz * morphTargetInfluences[${smile}];
+vFacePos -= getMorph(gl_VertexID, ${brow}, 0).xyz * morphTargetInfluences[${brow}];
+#endif`;
+      const turn = this.headMotion
+        ? "\ntransformed = mix(transformed, uHeadPivot + uHeadRot * (transformed - uHeadPivot), headWeight(position));"
+        : "";
       shader.vertexShader = shader.vertexShader
-        .replace("#include <common>", "#include <common>\nvarying vec3 vFacePos;")
-        .replace("#include <morphtarget_vertex>", "#include <morphtarget_vertex>\nvFacePos = transformed;");
+        .replace("#include <common>", `#include <common>\n${FACE_VERTEX_HEADER}`)
+        .replace("#include <morphtarget_vertex>", `#include <morphtarget_vertex>${facePos}${turn}`);
+      if (this.headMotion) {
+        shader.vertexShader = shader.vertexShader.replace(
+          "#include <beginnormal_vertex>",
+          "#include <beginnormal_vertex>\nobjectNormal = normalize(mix(objectNormal, uHeadRot * objectNormal, headWeight(position)));",
+        );
+      }
       shader.fragmentShader = shader.fragmentShader
         .replace("#include <common>", `#include <common>\n${FACE_FRAGMENT_HEADER}`)
         .replace("#include <map_fragment>", `#include <map_fragment>\n${FACE_FRAGMENT_BODY}`);
     };
-    material.customProgramCacheKey = () => "iident-face-v1";
+    material.customProgramCacheKey = () => `iident-face-v2-${this.morphIndex.smile}-${this.headMotion ? "head" : "rigged"}`;
     return material;
   }
 
@@ -249,6 +351,15 @@ export class FaceDriver {
       infl[this.morphIndex.jaw] = s.jaw;
       infl[this.morphIndex.wide] = s.wide;
       infl[this.morphIndex.round] = s.round;
+      infl[this.morphIndex.smile] = s.smile;
+      infl[this.morphIndex.brow] = s.brow;
+    }
+    if (this.headMotion) {
+      const { r, u, f } = this.frame;
+      _turn.setFromAxisAngle(u, s.head.yaw);
+      _turn.multiply(_part.setFromAxisAngle(r, -s.head.pitch));
+      _turn.multiply(_part.setFromAxisAngle(f, -s.head.roll));
+      (this.uniforms.uHeadRot.value as THREE.Matrix3).setFromMatrix4(_matrix.makeRotationFromQuaternion(_turn));
     }
     this.uniforms.uJaw.value = s.jaw;
     this.uniforms.uWide.value = s.wide;
@@ -256,6 +367,23 @@ export class FaceDriver {
     (this.uniforms.uBlink.value as THREE.Vector2).set(s.blinkLeft, s.blinkRight);
   }
 }
+
+const _turn = new THREE.Quaternion();
+const _part = new THREE.Quaternion();
+const _matrix = new THREE.Matrix4();
+
+const FACE_VERTEX_HEADER = /* glsl */ `
+varying vec3 vFacePos;
+uniform vec3 uMouthCenter;
+uniform vec3 uFaceUp;
+uniform vec3 uHeadPivot;
+uniform mat3 uHeadRot;
+uniform vec2 uNeck;
+// How much of the head's turn a vertex takes: all of it above the chin, none at the shoulders.
+float headWeight(vec3 p) {
+  return smoothstep(uNeck.x, uNeck.y, dot(p - uMouthCenter, uFaceUp));
+}
+`;
 
 const FACE_FRAGMENT_HEADER = /* glsl */ `
 varying vec3 vFacePos;
@@ -272,6 +400,7 @@ uniform float uWide;
 uniform float uRound;
 uniform vec3 uLipColor;
 uniform vec3 uSkinColor;
+uniform vec3 uLidColor;
 uniform vec4 uEyeL;
 uniform vec3 uEyeLShape;
 uniform vec4 uEyeR;
@@ -307,7 +436,8 @@ vec4 eyelid(vec3 p, vec4 eye, vec3 shape, float blink) {
   float edge = eye.w * 0.035;
   float cover = smoothstep(lid - edge, lid + edge, y) * (1.0 - smoothstep(top, top + eye.w * 0.12, y));
   float lash = (1.0 - smoothstep(eye.w * 0.03, eye.w * 0.09, abs(y - lid))) * step(0.15, blink);
-  vec3 lidColor = uSkinColor * 0.93;
+  // Slightly darker toward the lashes, like the fold of a real eyelid.
+  vec3 lidColor = uLidColor * mix(0.82, 1.0, smoothstep(lid, top, y));
   vec3 col = mix(lidColor, vec3(0.08, 0.06, 0.06), lash);
   return vec4(col, max(cover, lash * 0.9) * smoothstep(0.0, 0.15, blink));
 }
@@ -335,7 +465,10 @@ const FACE_FRAGMENT_BODY = /* glsl */ `
       cavity *= mix(0.55, 1.0, smoothstep(0.0, 0.5, abs(t - 0.45) * 2.0));
       float teethH = min(0.32 * h, 0.2 * uMouthHalfWidth);
       float teeth = smoothstep(1.0 - teethH / h - 0.02, 1.0 - teethH / h + 0.04, t) * (1.0 - smoothstep(0.82, 0.98, abs(xr)));
-      vec3 teethCol = mix(vec3(0.82, 0.8, 0.76), vec3(0.96, 0.95, 0.92), smoothstep(1.0 - teethH / h, 1.0, t));
+      // Off-white, shaded by the upper lip above and toward the corners, with faint gaps between teeth.
+      vec3 teethCol = mix(vec3(0.8, 0.77, 0.72), vec3(0.6, 0.56, 0.53), smoothstep(1.0 - 0.5 * teethH / h, 1.0, t));
+      teethCol *= mix(1.0, 0.6, smoothstep(0.3, 0.9, abs(xr)));
+      teethCol *= 1.0 - 0.2 * smoothstep(0.38, 0.5, abs(fract(xr * 3.5 + 0.5) - 0.5));
       float tongue = (1.0 - smoothstep(0.18, 0.42, t)) * (1.0 - smoothstep(0.45, 0.85, abs(xr))) * smoothstep(0.12, 0.35, h / uMouthHalfWidth);
       vec3 col = mix(cavity, vec3(0.62, 0.25, 0.27), tongue * 0.85);
       col = mix(col, teethCol, teeth * smoothstep(0.1, 0.22, h / uMouthHalfWidth));

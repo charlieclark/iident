@@ -46,20 +46,27 @@ const LM = {
   outerLower: [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291],
   chin: 152,
   noseTip: 1,
-  eyeA: { inner: 133, outer: 33, upper: [173, 157, 158, 159, 160, 161, 246], lower: [155, 154, 153, 145, 144, 163, 7] },
-  eyeB: { inner: 362, outer: 263, upper: [398, 384, 385, 386, 387, 388, 466], lower: [382, 381, 380, 374, 373, 390, 249] },
+  eyeA: { inner: 133, outer: 33, upper: [173, 157, 158, 159, 160, 161, 246], lower: [155, 154, 153, 145, 144, 163, 7], brow: [107, 66, 105, 63, 70], lid: [56, 28, 27, 29] },
+  eyeB: { inner: 362, outer: 263, upper: [398, 384, 385, 386, 387, 388, 466], lower: [382, 381, 380, 374, 373, 390, 249], brow: [336, 296, 334, 293, 300], lid: [286, 258, 257, 259] },
   cheeks: [50, 280, 101, 330, 123, 352],
   lips: [0, 17, 37, 267, 84, 314],
 };
 
-export function findCharacterMesh(root: THREE.Object3D): THREE.SkinnedMesh | null {
-  let best: THREE.SkinnedMesh | null = null;
+const asSkinned = (m: THREE.Mesh) => ((m as THREE.SkinnedMesh).isSkinnedMesh ? (m as THREE.SkinnedMesh) : null);
+
+/**
+ * The mesh that carries the face: the largest skinned mesh of a rigged
+ * character, or the largest plain mesh of a head-and-shoulders model, which
+ * has no skeleton.
+ */
+export function findCharacterMesh(root: THREE.Object3D): THREE.Mesh | null {
+  let best: THREE.Mesh | null = null;
+  const count = (m: THREE.Mesh) => (m.geometry as THREE.BufferGeometry).attributes.position.count;
   root.traverse((o) => {
-    const m = o as THREE.SkinnedMesh;
-    if (m.isSkinnedMesh) {
-      const n = (m.geometry as THREE.BufferGeometry).attributes.position.count;
-      if (!best || n > (best.geometry as THREE.BufferGeometry).attributes.position.count) best = m;
-    }
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const better = !best || (!!asSkinned(m) && !asSkinned(best)) || (!!asSkinned(m) === !!asSkinned(best) && count(m) > count(best));
+    if (better) best = m;
   });
   return best;
 }
@@ -76,21 +83,23 @@ type Baked = {
  * Note: Skeleton.pose() is deliberately not used; it corrupts bone scales when
  * the root bone's parent carries a transform, as Meshy's 0.01-scaled armature does.
  */
-function bake(skinned: THREE.SkinnedMesh): Baked {
-  skinned.updateMatrixWorld(true);
-  const geo = skinned.geometry as THREE.BufferGeometry;
+function bake(source: THREE.Mesh): Baked {
+  source.updateMatrixWorld(true);
+  const skinned = asSkinned(source);
+  const geo = source.geometry as THREE.BufferGeometry;
   const pos = geo.attributes.position;
   const baked = new Float32Array(pos.count * 3);
   const v = new THREE.Vector3();
-  const bones = skinned.skeleton.bones;
+  const bones = skinned?.skeleton.bones ?? [];
   const headIndex = bones.findIndex((b) => /^head$/i.test(b.name) || /(^|[^a-z])head$/i.test(b.name));
   const si = geo.attributes.skinIndex;
   const sw = geo.attributes.skinWeight;
   const headBox = new THREE.Box3();
   const fullBox = new THREE.Box3();
   for (let i = 0; i < pos.count; i++) {
-    skinned.getVertexPosition(i, v);
-    v.applyMatrix4(skinned.matrixWorld);
+    if (skinned) skinned.getVertexPosition(i, v);
+    else v.fromBufferAttribute(pos, i);
+    v.applyMatrix4(source.matrixWorld);
     baked.set([v.x, v.y, v.z], i * 3);
     fullBox.expandByPoint(v);
     if (headIndex >= 0 && si && sw) {
@@ -98,6 +107,17 @@ function bake(skinned: THREE.SkinnedMesh): Baked {
       for (let k = 0; k < 4; k++) if (si.getComponent(i, k) === headIndex) w += sw.getComponent(i, k);
       if (w > 0.5) headBox.expandByPoint(v);
     }
+  }
+  const fullSize = fullBox.getSize(new THREE.Vector3());
+  if (headBox.isEmpty() && !skinned && fullSize.y < fullSize.x * 1.4) {
+    // A head-and-shoulders model: the head is the upper, central part. This
+    // only needs to get the face into view; the view is then tightened
+    // around the face that is found.
+    const cx = (fullBox.min.x + fullBox.max.x) / 2;
+    headBox.set(
+      new THREE.Vector3(cx - fullSize.y * 0.32, fullBox.max.y - fullSize.y * 0.66, fullBox.min.z),
+      new THREE.Vector3(cx + fullSize.y * 0.32, fullBox.max.y, fullBox.max.z),
+    );
   }
   if (headBox.isEmpty()) {
     const h = fullBox.max.y - fullBox.min.y;
@@ -118,7 +138,7 @@ function bake(skinned: THREE.SkinnedMesh): Baked {
   g.computeBoundingSphere();
   g.computeBoundingBox();
 
-  const srcMat = (Array.isArray(skinned.material) ? skinned.material[0] : skinned.material) as THREE.MeshStandardMaterial;
+  const srcMat = (Array.isArray(source.material) ? source.material[0] : source.material) as THREE.MeshStandardMaterial;
   const mat = new THREE.MeshBasicMaterial({ map: srcMat.map ?? null, color: srcMat.map ? 0xffffff : srcMat.color, side: THREE.DoubleSide });
   const mesh = new THREE.Mesh(g, mat);
 
@@ -138,7 +158,35 @@ function bake(skinned: THREE.SkinnedMesh): Baked {
 
 const SIZE = 768;
 
-function renderHead(baked: Baked) {
+type View = { center: THREE.Vector3; half: number };
+
+function headView(baked: Baked): View {
+  const size = baked.headBox.getSize(new THREE.Vector3());
+  return { center: baked.headBox.getCenter(new THREE.Vector3()), half: Math.max(size.x, size.y, size.z) * 0.62 };
+}
+
+/** A tighter view around a detected face, so the landmarks are found at a higher resolution. */
+function faceView(baked: Baked, view: View, lms: { x: number; y: number }[]): View | null {
+  let x0 = 1, x1 = 0, y0 = 1, y1 = 0;
+  for (const p of lms) {
+    x0 = Math.min(x0, p.x);
+    x1 = Math.max(x1, p.x);
+    y0 = Math.min(y0, p.y);
+    y1 = Math.max(y1, p.y);
+  }
+  const extent = Math.max(x1 - x0, y1 - y0);
+  // Already fills most of the frame: nothing to gain.
+  if (extent > 0.5 || extent <= 0) return null;
+  const up = new THREE.Vector3(0, 1, 0);
+  const right = new THREE.Vector3().crossVectors(up, baked.forward).normalize();
+  const center = view.center
+    .clone()
+    .addScaledVector(right, ((x0 + x1) / 2 - 0.5) * 2 * view.half)
+    .addScaledVector(up, (0.5 - (y0 + y1) / 2) * 2 * view.half);
+  return { center, half: extent * view.half * 1.5 };
+}
+
+function renderHead(baked: Baked, view: View) {
   const canvas = document.createElement("canvas");
   canvas.width = SIZE;
   canvas.height = SIZE;
@@ -150,12 +198,9 @@ function renderHead(baked: Baked) {
   scene.background = new THREE.Color(0xffffff);
   scene.add(baked.mesh);
 
-  const box = baked.headBox;
-  const center = box.getCenter(new THREE.Vector3());
-  const size = box.getSize(new THREE.Vector3());
-  const half = Math.max(size.x, size.y, size.z) * 0.62;
+  const { center, half } = view;
   const camera = new THREE.OrthographicCamera(-half, half, half, -half, 0.001, 50);
-  camera.position.copy(center).addScaledVector(baked.forward, half * 6);
+  camera.position.copy(center).addScaledVector(baked.forward, Math.max(half * 6, 3));
   camera.up.set(0, 1, 0);
   camera.lookAt(center);
   camera.updateMatrixWorld(true);
@@ -165,15 +210,15 @@ function renderHead(baked: Baked) {
   ctx.canvas.height = SIZE;
   ctx.drawImage(canvas, 0, 0);
   renderer.dispose();
-  return { canvas, ctx, camera, scene };
+  return { canvas, ctx, camera, scene, view };
 }
 
 function geometryPoint(
-  skinned: THREE.SkinnedMesh,
+  source: THREE.Mesh,
   hit: THREE.Intersection,
 ): Vec3 | null {
   if (!hit.face || !hit.barycoord) return null;
-  const pos = (skinned.geometry as THREE.BufferGeometry).attributes.position;
+  const pos = (source.geometry as THREE.BufferGeometry).attributes.position;
   const a = new THREE.Vector3().fromBufferAttribute(pos, hit.face.a);
   const b = new THREE.Vector3().fromBufferAttribute(pos, hit.face.b);
   const c = new THREE.Vector3().fromBufferAttribute(pos, hit.face.c);
@@ -210,18 +255,28 @@ export async function computeFaceRig(
   withRestPose: <T>(fn: () => T) => T = (fn) => fn(),
 ): Promise<FaceRigResult> {
   const skinned = findCharacterMesh(root);
-  if (!skinned) throw new Error("No skinned mesh found in the character");
+  if (!skinned) throw new Error("No mesh found in the character");
   const baked = withRestPose(() => bake(skinned));
-  const { canvas, ctx, camera, scene } = renderHead(baked);
+  let shot = renderHead(baked, headView(baked));
 
   let landmarks: { x: number; y: number }[] | null = null;
   try {
     const landmarker = await getFaceLandmarker();
-    const result = landmarker.detect(canvas);
-    landmarks = result.faceLandmarks?.[0] ?? null;
+    landmarks = landmarker.detect(shot.canvas).faceLandmarks?.[0] ?? null;
+    // A face that is small in the first view is looked at again up close.
+    const closer = landmarks && faceView(baked, shot.view, landmarks);
+    if (closer) {
+      const second = renderHead(baked, closer);
+      const again = landmarker.detect(second.canvas).faceLandmarks?.[0] ?? null;
+      if (again) {
+        shot = second;
+        landmarks = again;
+      }
+    }
   } catch (err) {
     console.warn("Face landmark detection failed", err);
   }
+  const { canvas, ctx, camera, scene } = shot;
 
   const raycaster = new THREE.Raycaster();
   const toGeometry = (pt: { x: number; y: number }): Vec3 | null => {
@@ -272,6 +327,8 @@ function rigFromLandmarks(
   };
   const eyeA = eye(LM.eyeA);
   const eyeB = eye(LM.eyeB);
+  const browA = list(LM.eyeA.brow);
+  const browB = list(LM.eyeB.brow);
   if (!all(upperInner) || !all(lowerInner) || !all(upperOuter) || !all(lowerOuter) || !chin || !nose || !eyeA || !eyeB) {
     return null;
   }
@@ -304,6 +361,8 @@ function rigFromLandmarks(
     eyes: { left: eyeA, right: eyeB },
     skinColor: sampleColor(ctx, LM.cheeks.map((i) => lms[i])),
     lipColor: sampleColor(ctx, LM.lips.map((i) => lms[i])),
+    ...(all(browA) && all(browB) ? { brows: { left: browA, right: browB } } : {}),
+    lidColor: sampleColor(ctx, [...LM.eyeA.lid, ...LM.eyeB.lid].map((i) => lms[i])),
   };
 }
 
