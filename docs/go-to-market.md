@@ -38,7 +38,9 @@ So an avatar at the default cap of 300 replies a month costs $3 to $6 that month
 - **A cap** (`MONTHLY_REPLY_LIMIT`, default 300, 0 for none): past it the avatar answers in text only, with no model call or speech, until the next month. The owner sees the count on the share step.
 - **Voice cloning switch** (`VOICE_CLONING=off`).
 
-Not in place: accounts, payments, plans, per-plan limits.
+- **Accounts** (`src/lib/server/auth.ts`): sign-in by email link, avatars owned by an account and listed at `/me`, browser drafts attached on sign-in.
+
+Not in place: payments, plans, per-plan limits.
 
 ## How to sell it
 
@@ -73,7 +75,7 @@ What works now:
 
 What still gets in the way, in order of impact:
 
-1. **No accounts.** A draft lives in one browser. Clear the browser, lose the avatar. Needed before charging anyone. Inside Liinks this disappears (Liinks signs them in).
+1. ~~No accounts.~~ Done: sign in by email link; a reminder to save appears once there is a final character. Not yet required at any step.
 2. **The persona step is a long form.** Two fixes: draft it from two or three short answers, and, inside Liinks, fill it from the page (name, bio, links become the avatar's knowledge and cards with no typing).
 3. **Nothing to show for the free part.** Let people download or share their final character image before paying. It is the cheapest marketing available.
 4. **The 6-minute build has no notification.** If they close the tab they don't know it finished. Needs accounts (email) or a browser notification.

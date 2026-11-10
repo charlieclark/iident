@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { AccountLink } from "@/components/account/AccountLink";
 import { ContinueDraft } from "@/components/ContinueDraft";
 import { Logo } from "@/components/ui";
 
@@ -15,9 +16,12 @@ export default function Home() {
     <div className="min-h-dvh overflow-hidden">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
         <Logo />
-        <Link href="/create" className="rounded-full bg-ink-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-ink-800">
-          Create yours
-        </Link>
+        <div className="flex items-center gap-1">
+          <AccountLink />
+          <Link href="/create" className="rounded-full bg-ink-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-ink-800">
+            Create yours
+          </Link>
+        </div>
       </header>
 
       <main>

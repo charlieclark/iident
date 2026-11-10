@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { toPublicItem, type PublicItem } from "@/lib/avatar/context";
 import type { AvatarRecord } from "@/lib/avatar/types";
-import { getAvatar, getAvatarBySlug, verifyEditToken } from "@/lib/server/db";
+import { canEdit } from "@/lib/server/auth";
+import { getAvatar, getAvatarBySlug } from "@/lib/server/db";
 import { HttpError, handle, rateLimit } from "@/lib/server/http";
 import { SentenceChunker, sanitizeHistory, streamReply } from "@/lib/server/persona";
 import { countReply, limitMessage, overLimit } from "@/lib/server/usage";
@@ -20,7 +21,7 @@ const bodySchema = z.object({
 
 function resolveAvatar(req: Request, slug: string, previewId?: string): AvatarRecord {
   if (previewId) {
-    if (!verifyEditToken(previewId, req.headers.get("x-edit-token"))) throw new HttpError(403, "No access.");
+    if (!canEdit(req, previewId)) throw new HttpError(403, "No access.");
     const r = getAvatar(previewId);
     if (r) return r;
   }

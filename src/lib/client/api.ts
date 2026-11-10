@@ -5,9 +5,11 @@ import type { backdropChoiceSchema } from "@/lib/avatar/backdrop";
 import type { AvatarContext } from "@/lib/avatar/context";
 import type { Appearance } from "@/lib/avatar/options";
 import type { FaceRig, Persona } from "@/lib/avatar/types";
-import type { OwnerView } from "@/lib/server/http";
+import type { AvatarSummary, OwnerView } from "@/lib/server/http";
 
 export type Avatar = OwnerView;
+export type { AvatarSummary };
+export type Account = { user: { email: string } | null; avatars: AvatarSummary[] };
 export type BackdropChoice = z.infer<typeof backdropChoiceSchema>;
 
 const DRAFTS_KEY = "iident:drafts";
@@ -55,11 +57,25 @@ async function request<T>(path: string, init: RequestInit & { token?: string | n
   return data as T;
 }
 
-/** Adds the owner token to URLs of private files (selfie, concepts, voice). */
+/**
+ * Adds the owner token to URLs of private files (selfie, concepts, voice).
+ * With no token (an avatar opened through the account) the session cookie gives access.
+ */
 export const ownerUrl = (url: string | null | undefined, token: string | null) =>
   url && token ? `${url}?t=${encodeURIComponent(token)}` : (url ?? "");
 
 export const api = {
+  /** Asks for a sign-in link. `devLink` only comes back in development with no email service. */
+  startSignIn: (email: string) => request<{ sent: true; devLink?: string }>("/api/auth/start", { method: "POST", body: JSON.stringify({ email }) }),
+  finishSignIn: (token: string) => request<{ user: { email: string } }>("/api/auth/verify", { method: "POST", body: JSON.stringify({ token }) }),
+  signOut: () => request<{ ok: true }>("/api/auth/signout", { method: "POST" }),
+  me: () => request<Account>("/api/me"),
+  /** Attaches the drafts stored in this browser to the signed-in account. */
+  claimDrafts: () => {
+    const drafts = listDrafts().map(({ id, token }) => ({ id, token }));
+    if (!drafts.length) return Promise.resolve({ claimed: [] as string[] });
+    return request<{ claimed: string[] }>("/api/me/claim", { method: "POST", body: JSON.stringify({ drafts }) });
+  },
   create: () => request<{ avatar: Avatar; editToken: string }>("/api/avatars", { method: "POST" }),
   get: (id: string, token: string) => request<{ avatar: Avatar }>(`/api/avatars/${id}`, { token }),
   patch: (

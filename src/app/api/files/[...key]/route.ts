@@ -1,8 +1,8 @@
 import { connection } from "next/server";
-import { verifyEditToken } from "@/lib/server/db";
+import { canEdit } from "@/lib/server/auth";
 import { contentTypeFor, getFile } from "@/lib/server/storage";
 
-/** Personal inputs are only served to the owner (edit token in `?t=`). */
+/** Personal inputs are only served to the owner (edit token in `?t=`, or their signed-in session). */
 const PRIVATE = /^(selfie|voice|concept)-/;
 
 /** Serves stored avatar assets. File names are versioned, so they cache forever. */
@@ -12,7 +12,7 @@ export async function GET(req: Request, ctx: RouteContext<"/api/files/[...key]">
   const [avatarId, name] = key;
   if (!avatarId || !name || key.length !== 2) return new Response("Not found", { status: 404 });
   const isPrivate = PRIVATE.test(name);
-  if (isPrivate && !verifyEditToken(avatarId, new URL(req.url).searchParams.get("t"))) {
+  if (isPrivate && !canEdit(req, avatarId, new URL(req.url).searchParams.get("t"))) {
     return new Response("Forbidden", { status: 403 });
   }
   const path = `${avatarId}/${name}`;

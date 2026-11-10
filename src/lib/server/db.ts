@@ -18,7 +18,7 @@ type Row = { id: string; data: string; edit_token_hash: string };
 
 const g = globalThis as unknown as { __iidentDb?: DatabaseSync };
 
-function db(): DatabaseSync {
+export function db(): DatabaseSync {
   if (g.__iidentDb) return g.__iidentDb;
   mkdirSync(config.dataDir, { recursive: true });
   const conn = new DatabaseSync(path.join(config.dataDir, "app.db"));
@@ -33,12 +33,35 @@ function db(): DatabaseSync {
       updated_at INTEGER NOT NULL,
       data TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL,
+      data TEXT NOT NULL DEFAULT '{}'
+    );
+    CREATE TABLE IF NOT EXISTS login_tokens (
+      token_hash TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS sessions (
+      token_hash TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL
+    );
   `);
+  // Avatars made before accounts existed have no owner column.
+  const columns = conn.prepare("PRAGMA table_info(avatars)").all() as { name: string }[];
+  if (!columns.some((c) => c.name === "owner_id")) {
+    conn.exec("ALTER TABLE avatars ADD COLUMN owner_id TEXT; CREATE INDEX IF NOT EXISTS avatars_owner ON avatars (owner_id);");
+  }
   g.__iidentDb = conn;
   return conn;
 }
 
-const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
+export const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
 function parse(row: Row | undefined): AvatarRecord | null {
   if (!row) return null;
@@ -72,7 +95,7 @@ export function newAvatarId(): string {
   }
 }
 
-export function createAvatar(): { record: AvatarRecord; editToken: string } {
+export function createAvatar(ownerId?: string): { record: AvatarRecord; editToken: string } {
   const id = newAvatarId();
   const editToken = randomBytes(24).toString("base64url");
   const now = Date.now();
@@ -90,9 +113,9 @@ export function createAvatar(): { record: AvatarRecord; editToken: string } {
   };
   db()
     .prepare(
-      "INSERT INTO avatars (id, slug, published, edit_token_hash, created_at, updated_at, data) VALUES (?, NULL, 0, ?, ?, ?, ?)",
+      "INSERT INTO avatars (id, slug, published, edit_token_hash, created_at, updated_at, data, owner_id) VALUES (?, NULL, 0, ?, ?, ?, ?, ?)",
     )
-    .run(id, hashToken(editToken), now, now, JSON.stringify(record));
+    .run(id, hashToken(editToken), now, now, JSON.stringify(record), ownerId ?? null);
   return { record, editToken };
 }
 
@@ -145,4 +168,23 @@ export function isSlugTaken(slug: string, exceptId?: string): boolean {
     | { id: string }
     | undefined;
   return !!row && row.id !== exceptId;
+}
+
+/** The account an avatar belongs to, if it has been attached to one. */
+export function avatarOwner(id: string): string | null {
+  const row = db().prepare("SELECT owner_id FROM avatars WHERE id = ?").get(id) as { owner_id: string | null } | undefined;
+  return row?.owner_id ?? null;
+}
+
+/** Attaches an avatar to an account unless it already belongs to one. Returns whether it is now theirs. */
+export function claimAvatar(id: string, userId: string): boolean {
+  db().prepare("UPDATE avatars SET owner_id = ? WHERE id = ? AND owner_id IS NULL").run(userId, id);
+  return avatarOwner(id) === userId;
+}
+
+export function avatarsOwnedBy(userId: string): AvatarRecord[] {
+  const rows = db()
+    .prepare("SELECT id, data, edit_token_hash FROM avatars WHERE owner_id = ? ORDER BY updated_at DESC")
+    .all(userId) as Row[];
+  return rows.map((row) => parse({ ...row })!);
 }
