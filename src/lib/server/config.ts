@@ -27,6 +27,14 @@ export const config = {
     elevenLabsModel: env("ELEVENLABS_MODEL", "eleven_v4_turbo")!,
   },
 
+  /**
+   * Cloning a creator's voice from a recording. Off by default: avatars speak
+   * with stock voices, which need no consent checks and use no ElevenLabs
+   * voice slots. With it off, recordings are refused and existing clones are
+   * never spoken. Set VOICE_CLONING=on to bring it back.
+   */
+  voiceCloning: env("VOICE_CLONING") === "on",
+
   models: {
     /** Selfie + outfit -> full-body character sheet. */
     concept: env("FAL_CONCEPT_MODEL", "fal-ai/nano-banana-2/edit")!,

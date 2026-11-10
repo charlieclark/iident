@@ -234,7 +234,7 @@ function PublishCard({ avatar, token, onChange }: { avatar: Avatar; token: strin
         </div>
       </Field>
       {!avatar.persona.name && <Notice tone="warn">Add a name in the Persona step first.</Notice>}
-      {!avatar.voice && <Notice tone="warn">No voice yet: visitors will hear a stock voice.</Notice>}
+      {!avatar.voice && <Notice tone="warn">No voice picked yet: visitors will hear the default voice.</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
       <Button className="w-full" size="lg" loading={busy} disabled={slug.length < 3 || !avatar.persona.name} onClick={() => publish(true)}>
         Publish

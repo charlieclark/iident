@@ -4,7 +4,7 @@ import type { AvatarRecord } from "@/lib/avatar/types";
 import { getAvatar, getAvatarBySlug, verifyEditToken } from "@/lib/server/db";
 import { HttpError, handle, rateLimit } from "@/lib/server/http";
 import { SentenceChunker, sanitizeHistory, streamReply } from "@/lib/server/persona";
-import { createSpeaker, greetingFor } from "@/lib/server/voice";
+import { createSpeaker, greetingFor, usesClonedVoice } from "@/lib/server/voice";
 
 const bodySchema = z.object({
   messages: z
@@ -80,7 +80,14 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/chat/[sl
           const items = new Map(record.context.items.map((item) => [item.id, item]));
           const shown: string[] = [];
           let full = "";
-          for await (const event of streamReply({ persona: record.persona, context: record.context, history, signal: req.signal })) {
+          const reply = streamReply({
+            persona: record.persona,
+            context: record.context,
+            ownVoice: usesClonedVoice(record),
+            history,
+            signal: req.signal,
+          });
+          for await (const event of reply) {
             if (event.type === "show") {
               const cards = event.ids.flatMap((id) => {
                 const item = items.get(id);

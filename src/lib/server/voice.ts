@@ -10,6 +10,12 @@ export const MINIMAX_DEFAULT_VOICE = "Friendly_Person";
 
 export const activeProvider = (): SpeechProvider => config.tts.provider;
 
+const defaultVoice = (provider: SpeechProvider) =>
+  provider === "elevenlabs" ? eleven.ELEVENLABS_DEFAULT_VOICE : MINIMAX_DEFAULT_VOICE;
+
+/** Whether the avatar speaks with a clone of the creator's own voice (only while cloning is on). */
+export const usesClonedVoice = (record: AvatarRecord) => config.voiceCloning && record.voice?.mode === "clone";
+
 /** Stock voices for the active provider. */
 export function presetVoices(): readonly { id: string; label: string }[] {
   return activeProvider() === "elevenlabs" ? eleven.ELEVENLABS_VOICES : MINIMAX_VOICES;
@@ -79,9 +85,11 @@ function migrateClone(record: AvatarRecord): Promise<string> {
 export async function resolveVoice(record: AvatarRecord): Promise<{ provider: SpeechProvider; voiceId: string }> {
   const provider = activeProvider();
   const voice = record.voice;
+  // With cloning off, a clone recorded earlier is never spoken.
+  if (voice?.mode === "clone" && !config.voiceCloning) return { provider, voiceId: defaultVoice(provider) };
   const voiceProvider = voice?.provider ?? "minimax";
   if (voice && voiceProvider === provider) return { provider, voiceId: voice.voiceId };
-  if (provider === "minimax") return { provider, voiceId: MINIMAX_DEFAULT_VOICE };
+  if (provider === "minimax") return { provider, voiceId: defaultVoice(provider) };
   if (voice?.mode === "clone" && voice.sampleFile) {
     try {
       return { provider, voiceId: await migrateClone(record) };
@@ -89,7 +97,7 @@ export async function resolveVoice(record: AvatarRecord): Promise<{ provider: Sp
       console.error(`Could not move voice for ${record.id} to ElevenLabs`, err);
     }
   }
-  return { provider, voiceId: eleven.ELEVENLABS_DEFAULT_VOICE };
+  return { provider, voiceId: defaultVoice(provider) };
 }
 
 /**
@@ -98,11 +106,13 @@ export async function resolveVoice(record: AvatarRecord): Promise<{ provider: Sp
  * sample and the new id saved.
  */
 export async function speakAs(record: AvatarRecord, text: string) {
-  const voiceId = record.voice?.provider !== "elevenlabs" && record.voice?.voiceId ? record.voice.voiceId : MINIMAX_DEFAULT_VOICE;
+  const voice = record.voice;
+  const own = voice && voice.provider !== "elevenlabs" && (voice.mode === "preset" || config.voiceCloning) ? voice.voiceId : null;
+  const voiceId = own ?? MINIMAX_DEFAULT_VOICE;
   try {
     return await speakMinimax({ text, voiceId });
   } catch (err) {
-    if (record.voice?.mode !== "clone" || !record.voice.sampleUrl) throw err;
+    if (!usesClonedVoice(record) || !record.voice?.sampleUrl) throw err;
     const fresh = await cloneMinimax({ audioUrl: record.voice.sampleUrl, previewText: text.slice(0, 200) });
     updateAvatar(record.id, (r) => {
       if (r.voice) r.voice = { ...r.voice, voiceId: fresh.voiceId };

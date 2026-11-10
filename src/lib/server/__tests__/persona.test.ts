@@ -44,6 +44,12 @@ describe("persona prompt", () => {
     expect(p).not.toContain("show_items");
   });
 
+  it("says whose voice the avatar speaks with", () => {
+    const sam = { ...DEFAULT_PERSONA, name: "Sam" };
+    expect(buildSystemPrompt(sam)).toContain("in a stock voice Sam picked (not Sam's real voice)");
+    expect(buildSystemPrompt(sam, undefined, true)).toContain("with Sam's look and a clone of their voice speaks");
+  });
+
   it("lists the catalog with ids, hosts, prices and notes", () => {
     const p = buildSystemPrompt({ ...DEFAULT_PERSONA, name: "Sam" }, CONTEXT);
     expect(p).toContain("- ep (link): Night Drive (EP), on open.spotify.com. My new EP. (Show it when: someone asks about music)");

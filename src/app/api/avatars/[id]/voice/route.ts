@@ -1,3 +1,4 @@
+import { config } from "@/lib/server/config";
 import { updateAvatar } from "@/lib/server/db";
 import { cloneVoice, uploadToFal } from "@/lib/server/fal";
 import { HttpError, handle, ownerView, rateLimit, requireOwner } from "@/lib/server/http";
@@ -10,6 +11,7 @@ const TYPES: Record<string, string> = { "audio/wav": "wav", "audio/x-wav": "wav"
 /** Clones the creator's voice from a recorded or uploaded sample (10s+). */
 export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/[id]/voice">) => {
   const { id } = await ctx.params;
+  if (!config.voiceCloning) throw new HttpError(403, "Voice cloning is turned off. Pick a stock voice instead.");
   rateLimit(req, "voice", 6);
   const record = requireOwner(req, id);
   const form = await req.formData();

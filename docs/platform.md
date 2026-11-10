@@ -12,7 +12,7 @@ An avatar has three parts:
 
 | Part | What it is | Where it lives |
 | --- | --- | --- |
-| Identity | 3D model, face rig, voice | Built by the creator flow (`model`, `faceRig`, `voice` on the record) |
+| Identity | 3D model, face rig, voice | Built by the creator flow (`model`, `faceRig`, `voice` on the record). Voices are stock voices; cloning a recording is off by default |
 | Persona | Who it is and how it talks: name, tagline, about, traits, speaking style, topics to avoid, greeting, language | `persona` (`src/lib/avatar/types.ts`) |
 | Context | What it knows and what it can show | `context` (`src/lib/avatar/context.ts`) |
 
@@ -144,7 +144,7 @@ Liinks' visitor AI Chat is a Pro beta. A badge on the page opens a chat panel th
 ### Risks
 
 - **Cost per conversation.** One Claude call per turn plus speech per sentence. It needs per-page monthly caps before it can be part of Pro.
-- **Voice slots.** Each cloned voice takes an ElevenLabs slot; at Liinks scale that means an enterprise plan or stock voices by default.
+- **Voices.** Avatars use stock voices, which take no ElevenLabs voice slots and can't be used to impersonate anyone. Cloning stays off (`VOICE_CLONING`). Bringing it back would need consent checks and a plan for slots: ElevenLabs keeps each clone in a slot (2,200 on Business), while Fish Audio's API clones from the recording on each request.
 - **Weight on mobile.** The avatar is about 2 MB plus three.js. Load it only when the visitor opens the chat.
 - **Data ownership.** Transcripts would live in iident; the host should be able to export and delete them per user.
 

@@ -375,7 +375,7 @@ export function LookStep({ avatar, token, onChange, goTo }: StepProps) {
                   : "Bring it to life in 3D"}
           </Button>
           <p className="mt-2 text-center text-xs text-ink-500">
-            Building takes a few minutes. You&apos;ll set up your voice and persona meanwhile.
+            Building takes a few minutes. You&apos;ll pick a voice and set up the persona meanwhile.
           </p>
         </Card>
         {avatar.model && <BuildCard avatar={avatar} />}
