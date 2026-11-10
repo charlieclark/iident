@@ -1,6 +1,6 @@
 # iident
 
-Turn a selfie into a **talking 3D avatar** of yourself, pick its voice, give it a persona and the things it should know and show, and share one link that anyone can open to chat with it by voice or text. While it talks, the avatar can put your links, products, videos and images on screen as cards.
+Turn a selfie and a short voice recording into a **talking 3D avatar** of yourself, give it a persona and the things it should know and show, and share one link that anyone can open to chat with it by voice or text. While it talks, the avatar can put your links, products, videos and images on screen as cards.
 
 The avatar's context (knowledge plus a catalog of items) is generic, so other products can embed it: see [docs/platform.md](docs/platform.md) for the platform design and the plan to replace Liinks' AI Chat with it.
 
@@ -8,7 +8,7 @@ The avatar's context (knowledge plus a catalog of items) is generic, so other pr
 selfie ──► character sheet ──► textured 3D mesh ──► rigged GLB + 8 animation clips
             (Nano Banana)        (Meshy 7.1, A-pose)   (Meshy auto-rig, merged + compressed)
                                                               │
-stock voice (ElevenLabs, picked by the creator)               ▼
+voice sample ──► voice clone (Fish Audio, no slot limits)     ▼
 persona ───────► system prompt ──► Claude ──► sentence chunks ──► streaming TTS ──► lip-synced avatar
 context ───────┘                     └──► show_items(ids) ──► cards on screen
 ```
@@ -19,7 +19,7 @@ context ───────┘                     └──► show_items(ids
 
 **2. Look.** The creator picks a style (Animated, Realistic, Collectible, Anime, Clay), build, height, hair, facial hair, an outfit (presets plus per-piece type and color), accessories and free-text details. These compile into one prompt (`src/lib/avatar/options.ts`) that asks an image model to redraw the person as a full-body character sheet: A-pose, closed mouth, plain background, empty hands. Those constraints are what make the next steps reliable. Two variants come back in about 10 to 15 seconds and can be refined in plain words ("make the sneakers red").
 
-**3. 3D.** The chosen sheet goes to Meshy image-to-3D in A-pose, then to Meshy's auto-rigger with eight animation presets (idle, wave, two talking gestures, agree, think, listen, shrug). The server merges the rig and all clips into a single GLB, retargeting tracks by bone name, converts textures to WebP and applies lossless meshopt compression (about 1.6 MB in total, down from roughly 45 MB of raw downloads). This runs in the background, typically 3 to 10 minutes depending on queue load, while the creator picks a voice and writes the persona.
+**3. 3D.** The chosen sheet goes to Meshy image-to-3D in A-pose, then to Meshy's auto-rigger with eight animation presets (idle, wave, two talking gestures, agree, think, listen, shrug). The server merges the rig and all clips into a single GLB, retargeting tracks by bone name, converts textures to WebP and applies lossless meshopt compression (about 1.6 MB in total, down from roughly 45 MB of raw downloads). This runs in the background, typically 3 to 10 minutes depending on queue load, while the creator records their voice and writes the persona.
 
 **4. Making a generated mesh talk.** AI-generated meshes have a closed, painted-on mouth and no facial rig. In the creator's browser the head is rendered head-on in bind pose, MediaPipe finds the lips, eyes and chin on that render, and each landmark is raycast back onto the mesh (`src/lib/avatar/faceRigger.ts`). From those landmarks `src/lib/avatar/faceDriver.ts` builds:
 - morph targets for `jaw` (rotation around an estimated jaw hinge), `wide` and `round`;
@@ -28,7 +28,7 @@ context ───────┘                     └──► show_items(ids
 
 All of it lives in bind-pose geometry space, so it follows the head through every animation. The landmarks are stored with the avatar, so visitors never load MediaPipe.
 
-**5. Voice and conversation.** The creator picks one of ElevenLabs' stock voices and hears it say the greeting. Cloning the creator's own voice from a recording is built in but off by default (see Safety and privacy). Each visitor message streams to Claude with a persona system prompt (`src/lib/server/persona.ts`). As soon as the first clause of the reply is written it goes to ElevenLabs' streaming TTS (`src/lib/server/elevenlabs.ts`), and raw PCM audio is forwarded to the browser over server-sent events as it is generated. The browser schedules each chunk on the audio clock the moment it arrives (`src/lib/avatar/player.ts`), so the avatar starts talking a few hundred milliseconds after the text exists, while Claude is still writing. Later sentences are synthesized in order with the previous text passed along for natural intonation. Lip sync is driven from the audio itself (`src/lib/avatar/lipsync.ts`): loudness opens the jaw and the spectral centroid and hiss pick round, wide or closed shapes, so it works with any voice. Visitors can type or tap the mic (speech-to-text via Whisper on fal).
+**5. Voice and conversation.** The creator reads a short script (or picks one of ElevenLabs' stock voices). The recording is converted to WAV in the browser, kept, and uploaded once to Fish Audio as a private voice model (`src/lib/server/fish.ts`), so there is no voice slot limit. The model is only a cache of the recording: clones made with another service are re-created on Fish on first use, and a model that goes missing is rebuilt (`src/lib/server/voice.ts`). Each visitor message streams to Claude with a persona system prompt (`src/lib/server/persona.ts`). As soon as the first clause of the reply is written it goes to streaming TTS (Fish Audio for cloned voices, ElevenLabs for stock voices), and raw PCM audio is forwarded to the browser over server-sent events as it is generated. The browser schedules each chunk on the audio clock the moment it arrives (`src/lib/avatar/player.ts`), so the avatar starts talking a few hundred milliseconds after the text exists, while Claude is still writing. Later sentences are synthesized in order with the previous text passed along for natural intonation. Lip sync is driven from the audio itself (`src/lib/avatar/lipsync.ts`): loudness opens the jaw and the spectral centroid and hiss pick round, wide or closed shapes, so it works with any voice. Visitors can type or tap the mic (speech-to-text via Whisper on fal).
 
 **6. Showing things.** Next to the persona, the creator gives the avatar a context: free-text knowledge (facts, FAQs) and a catalog of items it can show, each a link, product, video or image with a stable id (`src/lib/avatar/context.ts`). The catalog goes into the system prompt and Claude gets one tool, `show_items`, which it calls with up to three ids after its spoken sentence. The server drops unknown ids and streams a `show` event with the cards, which appear under the reply while the avatar is still talking (`src/components/ItemCard.tsx`). YouTube, Vimeo and video files play inline, and the avatar stops talking when they do. The avatar has no other links, so it can't invent one.
 
@@ -43,6 +43,7 @@ Measured while building this, using the default models:
 | Two character sheets (Nano Banana 2) | about 11 s |
 | 3D mesh + rig + 8 clips (Meshy) | 3 to 13 min, depending on queue load |
 | Speech-to-text (Whisper) | about 2.5 s |
+| Voice clone (Fish Audio private model) | a few seconds |
 | First audio of a reply (ElevenLabs v4 Turbo, streaming) | about 0.3 s after the text, about 0.65 s from click to sound in the browser |
 | First audio with the MiniMax fallback (whole clips via fal) | about 4 s |
 
@@ -68,7 +69,7 @@ npm run dev
 
 Open http://localhost:3000 and click **Create your avatar**.
 
-Without `ANTHROPIC_API_KEY` the avatar still talks, but replies with a setup hint instead of a real answer, or shows the item whose title best matches the visitor's words (handy for testing cards). Without `ELEVENLABS_API_KEY`, speech falls back to MiniMax on fal (several seconds per sentence). Without `FAL_KEY`, generation endpoints return a clear 503.
+Without `ANTHROPIC_API_KEY` the avatar still talks, but replies with a setup hint instead of a real answer, or shows the item whose title best matches the visitor's words (handy for testing cards). Add `FISH_API_KEY` to clone voices with Fish Audio; without it, clones are made with ElevenLabs. Without `ELEVENLABS_API_KEY`, stock voices and speech fall back to MiniMax on fal (several seconds per sentence). Without `FAL_KEY`, generation endpoints return a clear 503.
 
 Data (SQLite database and files) is written to `./data`.
 
@@ -100,14 +101,14 @@ src/
     api/chat/[slug]           SSE conversation: Claude text, streamed speech (PCM), cards to show
     api/voices                stock voices for the active speech provider
     api/stt                   visitor speech-to-text
-    api/files/[...key]        stored assets (selfies, concepts and any voice samples are owner-only)
+    api/files/[...key]        stored assets (selfies, voice samples and concepts are owner-only)
   components/
     create/                   creator steps
     AvatarStage.tsx           React wrapper around the three.js player
     AvatarChat.tsx            chat UI with push-to-talk
     ItemCard.tsx              cards for links, products, images and inline videos
   lib/avatar/                 options + prompt builder, context (knowledge + items), player, face rigger/driver, lip sync
-  lib/server/                 config, SQLite store, storage, fal wrappers, GLB merge, jobs, persona
+  lib/server/                 config, SQLite store, storage, fal wrappers, GLB merge, jobs, persona, speech (ElevenLabs, Fish Audio)
   lib/client/                 API client, recorder + WAV encoder, SSE client, selfie checks
 ```
 
@@ -115,14 +116,14 @@ src/
 
 All model choices are environment variables (see `.env.example`), so newer fal endpoints can be swapped in without code changes. The conversation model defaults to `claude-opus-5-5` with low effort for fast spoken replies and server-side refusal fallbacks enabled; set `AVATAR_CHAT_MODEL` to change it (for example to `claude-haiku-5-5` for lower latency and cost).
 
-Speech uses ElevenLabs whenever `ELEVENLABS_API_KEY` is set. `ELEVENLABS_MODEL` picks the model (default `eleven_v4_turbo`; `eleven_flash_v2_5` is a slightly faster, lower-fidelity alternative at the same price), and `TTS_PROVIDER=minimax` forces the fal fallback. `VOICE_CLONING=on` lets creators clone their own voice from a recording; it is off by default.
+Speech uses ElevenLabs whenever `ELEVENLABS_API_KEY` is set. `ELEVENLABS_MODEL` picks the model (default `eleven_v4_turbo`; `eleven_flash_v2_5` is a slightly faster, lower-fidelity alternative at the same price), and `TTS_PROVIDER=minimax` forces the fal fallback for stock voices. Cloned voices go to `CLONE_PROVIDER` (`fish`, `elevenlabs` or `minimax`; Fish by default when `FISH_API_KEY` is set), with `FISH_MODEL` (default `s2.1-pro`) and `FISH_LATENCY` (default `balanced`). `VOICE_CLONING=off` switches cloning off.
 
 ## Safety and privacy
 
-- Creators must confirm the photo is theirs, or used with permission, before upload.
-- Avatars speak with stock voices. Voice cloning is off by default, because a cloned voice is the easiest part of an avatar to misuse for impersonation. With it off, recordings are refused, clones made earlier are never spoken, and the persona prompt tells the model its voice is not the person's own. If it is turned on (`VOICE_CLONING=on`), creators must also confirm the voice is theirs.
+- Creators must confirm the photo and voice are theirs, or used with permission, before upload or cloning.
+- A cloned voice is the easiest part of an avatar to misuse for impersonation, so cloning has an off switch (`VOICE_CLONING=off`): recordings are then refused, clones made earlier are never spoken, and avatars use stock voices. The persona prompt always tells the model whether it speaks with the person's own voice or a stock voice, so it never claims a stock voice is theirs.
 - The public page labels the avatar as an AI, and the persona prompt requires it to say so when asked, avoid commitments on the person's behalf, stick to the facts the creator provided and never share private contact, financial or health details.
-- Selfies, concept images and voice samples (when cloning is on) are only served to the owner (edit token); the public page only exposes the 3D model and a thumbnail.
+- Selfies, voice samples and concept images are only served to the owner (edit token); the public page only exposes the 3D model and a thumbnail.
 - Editing is protected by a random edit token stored in the creator's browser (only its hash is stored server-side).
 - Basic per-IP rate limits protect the expensive endpoints.
 
@@ -131,8 +132,8 @@ Speech uses ElevenLabs whenever `ELEVENLABS_API_KEY` is set. `ELEVENLABS_MODEL` 
 - **Long-running work.** The 3D build runs in-process via `after()`. Deploy on a persistent Node server (Fly.io, Render, Railway, a VM). On serverless platforms move the job to a queue or use fal webhooks. Jobs interrupted by a restart are surfaced as failed so the user can retry.
 - **Storage and database.** `src/lib/server/storage.ts` (local disk) and `src/lib/server/db.ts` (SQLite) are small, isolated modules; swap them for S3/R2 and Postgres for multi-instance deployments.
 - **Accounts.** Drafts are tied to the browser that created them. Add real auth (and an "edit link" email) before launch.
-- **Costs.** Each avatar uses two image generations per round, one image-to-3D run and one rigging run; each reply uses one Claude call (two in the rare case it shows cards before saying anything) and one TTS call per sentence.
-- **Voice cloning at scale.** Stock voices use no ElevenLabs voice slots. If cloning is turned on, every clone takes a slot for as long as the avatar exists (30 on Creator, 160 on Pro, 660 on Scale, 2,200 on Business, custom on Enterprise, per ElevenLabs' pricing page in November 2026), and each new clone counts against a monthly quota of voice creations and edits (95 on Creator). Plan for a higher tier, or for a provider that clones from the recording on each request (Fish Audio's API does). Re-recording or switching to a stock voice frees the old clone's slot.
+- **Costs.** Each avatar uses two image generations per round, one image-to-3D run, one rigging run and one voice clone; each reply uses one Claude call (two in the rare case it shows cards before saying anything) and one TTS call per sentence.
+- **Voice cloning at scale.** With `FISH_API_KEY` set, clones are private Fish Audio voice models; Fish publishes no cap on models and no monthly clone quota (check your plan's concurrency: 5 requests under $100 prepaid, 15 from $100, 50 from $1,000). Clones made with ElevenLabs instead each take a voice slot for as long as the avatar exists (30 on Creator, 160 on Pro, 660 on Scale, 2,200 on Business, per ElevenLabs' pricing page in November 2026) and count against a monthly quota of new voices (95 on Creator). Stock voices use no slots, and re-recording or switching to a stock voice frees the old clone.
 
 ## Known limitations
 

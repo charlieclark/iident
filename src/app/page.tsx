@@ -6,7 +6,7 @@ import { Logo } from "@/components/ui";
 const STEPS = [
   { title: "Snap a selfie", body: "One clear photo is enough to capture your likeness." },
   { title: "Style your character", body: "Pick an art style, body type and outfit, then tweak it in plain words." },
-  { title: "Pick its voice", body: "Choose a natural-sounding voice. Your avatar speaks every reply aloud, lip-synced." },
+  { title: "Lend it your voice", body: "Read a short script and your avatar speaks with a clone of your voice." },
   { title: "Share one link", body: "Give it a persona. Anyone with the link can talk to your 3D twin." },
 ];
 
@@ -29,11 +29,11 @@ export default function Home() {
             <h1 className="mt-5 text-5xl font-semibold leading-[1.02] tracking-tight text-ink-900 sm:text-6xl">
               Your 3D twin.
               <br />
-              <span className="text-accent-500">Your words.</span> One link.
+              <span className="text-accent-500">Your voice.</span> One link.
             </h1>
             <p className="mt-5 max-w-lg text-lg text-ink-600">
-              Upload a selfie, choose your look and tell it about yourself. We build a 3D character that looks like you,
-              knows what you want people to know and chats with anyone who opens your link.
+              Upload a selfie, record a few sentences and choose your look. We build a 3D character that looks like you,
+              speaks like you and chats with anyone who opens your link.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link

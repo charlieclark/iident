@@ -44,7 +44,8 @@ function play(url: string) {
 
 export function VoiceStep({ avatar, token, onChange, goTo }: StepProps) {
   const options = useVoiceOptions();
-  const cloning = options?.cloning ?? false;
+  // Cloning is on unless the server turns it off; assume on while loading.
+  const cloning = options?.cloning ?? true;
   const [mode, setMode] = useState<"record" | "preset">(avatar.voice?.mode === "preset" ? "preset" : "record");
   const recording = cloning && mode === "record";
   return (

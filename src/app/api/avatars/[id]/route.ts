@@ -2,10 +2,9 @@ import { z } from "zod";
 import { contextSchema } from "@/lib/avatar/context";
 import { appearanceSchema } from "@/lib/avatar/options";
 import { getAvatar, updateAvatar } from "@/lib/server/db";
-import { deleteVoice } from "@/lib/server/elevenlabs";
 import { HttpError, handle, ownerView, requireOwner } from "@/lib/server/http";
 import { reconcileJob } from "@/lib/server/jobs";
-import { activeProvider, presetVoices } from "@/lib/server/voice";
+import { activeProvider, freeClone, presetVoices } from "@/lib/server/voice";
 
 export const GET = handle(async (req: Request, ctx: RouteContext<"/api/avatars/[id]">) => {
   const { id } = await ctx.params;
@@ -56,9 +55,7 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/avatars
       r.voice = { mode: "preset", provider: activeProvider(), voiceId: body.voicePreset, createdAt: Date.now() };
     }
   });
-  // Switching to a stock voice frees the old clone's ElevenLabs voice slot.
-  if (body.voicePreset && previous?.provider === "elevenlabs" && previous.mode === "clone") {
-    deleteVoice(previous.voiceId).catch((err) => console.warn("Could not free old voice", err));
-  }
+  // Switching to a stock voice frees the old clone (and its ElevenLabs voice slot).
+  if (body.voicePreset) freeClone(previous);
   return Response.json({ avatar: ownerView(record) });
 });

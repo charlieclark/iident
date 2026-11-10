@@ -119,7 +119,7 @@ export type ModelJob = {
   meshReused?: boolean;
 };
 
-export type SpeechProvider = "elevenlabs" | "minimax";
+export type SpeechProvider = "elevenlabs" | "minimax" | "fish";
 
 export type VoiceProfile = {
   mode: "clone" | "preset";

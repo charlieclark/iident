@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
   title: { default: "iident · Your talking 3D avatar", template: "%s · iident" },
   description:
-    "Turn a selfie into a talking 3D avatar with your look and your personality. Share one link; anyone can chat with it.",
+    "Turn a selfie and a voice recording into a talking 3D avatar with your look, your voice and your personality. Share one link; anyone can chat with it.",
   openGraph: { siteName: "iident", type: "website" },
 };
 

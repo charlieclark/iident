@@ -1,9 +1,8 @@
 import { config } from "@/lib/server/config";
 import { updateAvatar } from "@/lib/server/db";
-import { cloneVoice, uploadToFal } from "@/lib/server/fal";
 import { HttpError, handle, ownerView, rateLimit, requireOwner } from "@/lib/server/http";
 import { putFile } from "@/lib/server/storage";
-import { activeProvider, cloneWithElevenLabs, greetingFor } from "@/lib/server/voice";
+import { cloneRecording } from "@/lib/server/voice";
 
 const MAX_BYTES = 20 * 1024 * 1024;
 const TYPES: Record<string, string> = { "audio/wav": "wav", "audio/x-wav": "wav", "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/x-m4a": "m4a" };
@@ -31,25 +30,9 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
   const sampleFile = await putFile(id, `voice-${Date.now().toString(36)}.${ext}`, data);
 
   try {
-    if (activeProvider() === "elevenlabs") {
-      const voiceId = await cloneWithElevenLabs(record, { data, filename: `voice.${ext}`, contentType });
-      const updated = updateAvatar(id, (r) => {
-        r.voice = { mode: "clone", provider: "elevenlabs", voiceId, sampleFile, createdAt: Date.now() };
-      });
-      return Response.json({ avatar: ownerView(updated) });
-    }
-    const sampleUrl = await uploadToFal(data, contentType, `voice.${ext}`);
-    const cloned = await cloneVoice({ audioUrl: sampleUrl, previewText: greetingFor(record.persona) });
+    const voice = await cloneRecording(record, { data, filename: `voice.${ext}`, contentType, file: sampleFile });
     const updated = updateAvatar(id, (r) => {
-      r.voice = {
-        mode: "clone",
-        provider: "minimax",
-        voiceId: cloned.voiceId,
-        sampleFile,
-        sampleUrl,
-        previewUrl: cloned.previewUrl,
-        createdAt: Date.now(),
-      };
+      r.voice = voice;
     });
     return Response.json({ avatar: ownerView(updated) });
   } catch (err) {
