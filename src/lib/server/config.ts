@@ -35,6 +35,12 @@ export const config = {
     apiBase: env("STRIPE_API_BASE", "https://api.stripe.com")!,
     /** Price ids from the Stripe dashboard. Without them checkout charges the plan's listed price directly. */
     prices: { creator: env("STRIPE_PRICE_CREATOR"), pro: env("STRIPE_PRICE_PRO") },
+    /**
+     * Tax category of the plans when checkout creates the product itself:
+     * a cloud-hosted AI service for personal use. Stripe requires one on
+     * accounts with Managed Payments, and uses it to work out sales tax.
+     */
+    taxCode: env("STRIPE_TAX_CODE", "txcd_10105001")!,
     /** Accounts that get Pro without paying (comma-separated emails). */
     compEmails: (env("COMP_EMAILS") ?? "")
       .split(",")
