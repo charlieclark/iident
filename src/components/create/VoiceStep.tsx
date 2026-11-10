@@ -152,7 +152,7 @@ function RecordVoice({ avatar, token, onChange }: { avatar: Avatar; token: strin
     setError(null);
     setTake(null);
     try {
-      const r = new Recorder();
+      const r = new Recorder("voice-sample");
       await r.start();
       recorder.current = r;
       setRecording(true);

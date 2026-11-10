@@ -1,7 +1,7 @@
 import "server-only";
 import { encode } from "@msgpack/msgpack";
 import { config, HttpError } from "./config";
-import { PCM_SAMPLE_RATE, wholeSamples } from "./pcm";
+import { wholeSamples } from "./pcm";
 
 /**
  * Fish Audio: voice cloning without voice slots, plus streaming text to speech.
@@ -93,7 +93,7 @@ function speechRequest(r: SpeechRequest, format: "pcm" | "mp3"): RequestInit {
   const body = {
     text: r.text,
     format,
-    ...(format === "pcm" ? { sample_rate: PCM_SAMPLE_RATE } : { mp3_bitrate: 64 }),
+    ...(format === "pcm" ? { sample_rate: config.tts.fishSampleRate } : { mp3_bitrate: 128 }),
     latency: config.tts.fishLatency,
     normalize: true,
   };
@@ -115,7 +115,7 @@ function speechRequest(r: SpeechRequest, format: "pcm" | "mp3"): RequestInit {
   };
 }
 
-/** Streams speech as 16-bit mono PCM at 24 kHz (the format the ElevenLabs path uses), in whole samples. */
+/** Streams speech as 16-bit mono PCM at `config.tts.fishSampleRate`, in whole samples. */
 export async function* streamSpeech(r: SpeechRequest): AsyncGenerator<Uint8Array> {
   const res = await fetch(`${API}/v1/tts`, speechRequest(r, "pcm"));
   if (!res.ok || !res.body) throw await failure(res, "speech");

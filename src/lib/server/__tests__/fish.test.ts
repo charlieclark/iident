@@ -70,7 +70,7 @@ describe("Fish Audio client", () => {
     ).rejects.toThrow(/could not build/);
   });
 
-  it("streams 24 kHz PCM in whole samples from the model", async () => {
+  it("streams 44.1 kHz PCM in whole samples from the model", async () => {
     const calls = mockFetch(() => new Response(chunked([1, 2, 3], [4, 5], [6])));
     const chunks: number[][] = [];
     for await (const c of fish.streamSpeech({ text: "Hello there.", voice: { modelId: "model-1" } })) chunks.push([...c]);
@@ -82,7 +82,7 @@ describe("Fish Audio client", () => {
       text: "Hello there.",
       reference_id: "model-1",
       format: "pcm",
-      sample_rate: 24000,
+      sample_rate: 44100,
       latency: "balanced",
       normalize: true,
     });
@@ -95,7 +95,7 @@ describe("Fish Audio client", () => {
     const { init } = calls[0];
     expect((init.headers as Record<string, string>)["content-type"]).toBe("application/msgpack");
     const body = decode(init.body as Uint8Array) as Record<string, unknown>;
-    expect(body).toMatchObject({ text: "Hi!", format: "pcm", sample_rate: 24000, latency: "balanced" });
+    expect(body).toMatchObject({ text: "Hi!", format: "pcm", sample_rate: 44100, latency: "balanced" });
     expect(body.references).toEqual([{ audio: new Uint8Array([9, 8, 7]), text: "This is my voice." }]);
     expect(body).not.toHaveProperty("reference_id");
   });

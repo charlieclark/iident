@@ -44,6 +44,8 @@ export const config = {
     fishVoiceMode: env("FISH_VOICE_MODE", "inline") as "inline" | "model",
     /** "balanced" favors time to first audio; "normal" favors stability. */
     fishLatency: env("FISH_LATENCY", "balanced")!,
+    /** Fish output rate. 44.1 kHz carries the highs above 12 kHz that a 24 kHz stream cuts off. */
+    fishSampleRate: Number(env("FISH_SAMPLE_RATE", "44100")),
   },
 
   /**
