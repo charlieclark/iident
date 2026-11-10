@@ -6,10 +6,24 @@ import type { AvatarContext } from "@/lib/avatar/context";
 import type { Appearance } from "@/lib/avatar/options";
 import type { FaceRig, Persona } from "@/lib/avatar/types";
 import type { AvatarSummary, OwnerView } from "@/lib/server/http";
+import type { PaidPlanId, PlanId } from "@/lib/billing/plans";
 
 export type Avatar = OwnerView;
 export type { AvatarSummary };
-export type Account = { user: { email: string } | null; avatars: AvatarSummary[] };
+export type Billing = {
+  /** False when payments aren't configured: nothing is paywalled. */
+  enabled: boolean;
+  plan?: PlanId;
+  builds?: { used: number; limit: number };
+  live?: { used: number; limit: number };
+  /** Replies to visitors this month across the account's avatars. */
+  replies?: { used: number; limit: number };
+  manageable?: boolean;
+  status?: string | null;
+  renewsAt?: number | null;
+  cancelAtPeriodEnd?: boolean;
+};
+export type Account = { user: { email: string } | null; avatars: AvatarSummary[]; billing: Billing };
 export type BackdropChoice = z.infer<typeof backdropChoiceSchema>;
 
 const DRAFTS_KEY = "iident:drafts";
@@ -70,6 +84,10 @@ export const api = {
   finishSignIn: (token: string) => request<{ user: { email: string } }>("/api/auth/verify", { method: "POST", body: JSON.stringify({ token }) }),
   signOut: () => request<{ ok: true }>("/api/auth/signout", { method: "POST" }),
   me: () => request<Account>("/api/me"),
+  /** Starts checkout for a plan; open the returned URL. */
+  checkout: (plan: PaidPlanId) => request<{ url: string }>("/api/billing/checkout", { method: "POST", body: JSON.stringify({ plan }) }),
+  confirmCheckout: (sessionId: string) => request<{ plan: PlanId }>("/api/billing/confirm", { method: "POST", body: JSON.stringify({ sessionId }) }),
+  billingPortal: () => request<{ url: string }>("/api/billing/portal", { method: "POST" }),
   /** Attaches the drafts stored in this browser to the signed-in account. */
   claimDrafts: () => {
     const drafts = listDrafts().map(({ id, token }) => ({ id, token }));

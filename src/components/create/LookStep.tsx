@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   ACCESSORIES,
@@ -16,7 +18,9 @@ import {
   TOPS,
   type Appearance,
 } from "@/lib/avatar/options";
-import { api, ownerUrl } from "@/lib/client/api";
+import { PLANS } from "@/lib/billing/plans";
+import { needsPlan, useAccount } from "@/lib/client/account";
+import { api, ApiError, ownerUrl } from "@/lib/client/api";
 import { Button, Card, Chip, cx, Field, inputClass, Notice, SectionTitle, Segmented, Spinner, Swatches } from "@/components/ui";
 import { BuildCard } from "./BuildStatus";
 import type { StepProps } from "./CreateFlow";
@@ -37,6 +41,13 @@ export function LookStep({ avatar, token, onChange, goTo }: StepProps) {
   const [finalizing, setFinalizing] = useState(false);
   const [refining, setRefining] = useState(false);
   const [building, setBuilding] = useState(false);
+  const [needsUpgrade, setNeedsUpgrade] = useState(false);
+  const router = useRouter();
+  const { account } = useAccount();
+  const here = `/create?id=${avatar.id}`;
+  const plansUrl = `/pricing?next=${encodeURIComponent(here)}`;
+  /** Building in 3D needs a plan (when payments are switched on). */
+  const locked = needsPlan(account);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(avatar.selectedConceptId ?? avatar.concepts[0]?.id ?? null);
   const [instruction, setInstruction] = useState("");
@@ -113,6 +124,11 @@ export function LookStep({ avatar, token, onChange, goTo }: StepProps) {
 
   async function build() {
     if (!selected) return;
+    if (locked) {
+      // The plans page leads through sign-in and checkout, then back here.
+      router.push(plansUrl);
+      return;
+    }
     setBuilding(true);
     setError(null);
     try {
@@ -120,7 +136,10 @@ export function LookStep({ avatar, token, onChange, goTo }: StepProps) {
       onChange(next);
       goTo(next.voice ? "persona" : "voice");
     } catch (e) {
-      setError((e as Error).message);
+      // The server has the final say on plans (for example this month's builds are used up).
+      if (e instanceof ApiError && e.status === 401) router.push(`/login?next=${encodeURIComponent(here)}`);
+      else setError((e as Error).message);
+      setNeedsUpgrade(e instanceof ApiError && e.status === 402);
     } finally {
       setBuilding(false);
     }
@@ -375,7 +394,14 @@ export function LookStep({ avatar, token, onChange, goTo }: StepProps) {
 
           {error && (
             <div className="mt-3">
-              <Notice tone="error">{error}</Notice>
+              <Notice tone="error">
+                <span>{error}</span>
+                {needsUpgrade && (
+                  <Link href={plansUrl} className="ml-1 font-medium underline">
+                    See plans
+                  </Link>
+                )}
+              </Notice>
             </div>
           )}
 
@@ -391,7 +417,7 @@ export function LookStep({ avatar, token, onChange, goTo }: StepProps) {
                       : "Bring it to life in 3D"}
               </Button>
               <div className="mt-2 flex items-center justify-between text-xs text-ink-500">
-                <span>Building takes a few minutes.</span>
+                <span>{locked ? `Part of the Creator plan, $${PLANS.creator.price} a month.` : "Building takes a few minutes."}</span>
                 <button type="button" className="underline hover:text-ink-800 disabled:opacity-50" disabled={finalizing} onClick={finalize}>
                   Draw it again
                 </button>

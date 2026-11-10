@@ -39,8 +39,9 @@ So an avatar at the default cap of 300 replies a month costs $3 to $6 that month
 - **Voice cloning switch** (`VOICE_CLONING=off`).
 
 - **Accounts** (`src/lib/server/auth.ts`): sign-in by email link, avatars owned by an account and listed at `/me`, browser drafts attached on sign-in.
+- **Plans and payments** (`src/lib/billing/plans.ts`, `src/lib/server/billing.ts`): Free, Creator and Pro; Stripe Checkout, billing portal and webhook; the paywall at the 3D build and at publishing; replies, live avatars and builds limited by plan. Off until `STRIPE_SECRET_KEY` is set.
 
-Not in place: payments, plans, per-plan limits.
+Not in place: annual plans, extra replies as an add-on, a trial, refunds or proration rules beyond Stripe's defaults.
 
 ## How to sell it
 
@@ -62,7 +63,16 @@ A cost-based way to set the Liinks offer:
 
 The free tier costs about 15 cents per person and gives them something to share (their character). The paywall sits exactly where the cost is: bringing it to life in 3D.
 
-These prices are a starting point from costs, not from testing what people will pay.
+These prices are a starting point from costs, not from testing what people will pay. This table is what is built (`src/lib/billing/plans.ts`), with 2 builds in 3D a month on Creator and 5 on Pro; embedding on your own site is not built yet and is not advertised.
+
+**Worst case per account per month** (every build and every reply used, replies at 1 to 2 cents):
+
+| | Revenue after Stripe fees | Builds | Replies | Worst-case margin |
+| --- | --- | --- | --- | --- |
+| Creator | about $9.40 | 2 × $2.36 = $4.72 | 300 = $3 to $6 | about $0 to minus $1.30 |
+| Pro | about $27.90 | 5 × $2.36 = $11.80 | 2,000 = $20 to $40 | about minus $4 to minus $24 |
+
+A plan's replies are shared by the account's avatars. Typical use will be far below the caps (one build, a few dozen replies), but a Pro account that uses everything costs more than it pays. Two fixes, either is enough: a cheaper chat model (Haiku would bring a reply to roughly half a cent to one cent, so 2,000 replies cost $10 to $20), or a lower allowance (1,200). Decide this before promoting Pro.
 
 ## A new user's first ten minutes
 
@@ -85,5 +95,7 @@ What still gets in the way, in order of impact:
 
 1. Merge the open work (crisper voice, house style and sketches, metering).
 2. Try the creator yourself with your own selfie and voice; check the likeness and the 3D result on your phone.
-3. Decide: Liinks first, or standalone first. This decides whether the next build is the platform API or accounts and Stripe.
-4. Put five real people through it.
+3. ~~Decide: Liinks first, or standalone first.~~ Decided: standalone first. Accounts and Stripe billing are built.
+4. Connect a Stripe account (test mode first) and an email service, deploy, and run one real purchase.
+5. Decide Pro's reply allowance or the chat model (see the margin table above).
+6. Put five real people through it.

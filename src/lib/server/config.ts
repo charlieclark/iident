@@ -26,6 +26,29 @@ export const config = {
   },
 
   /**
+   * Payments. With no secret key, billing is off: nothing is paywalled and
+   * the limits below in `limits` apply to every avatar.
+   */
+  stripe: {
+    secretKey: env("STRIPE_SECRET_KEY"),
+    webhookSecret: env("STRIPE_WEBHOOK_SECRET"),
+    apiBase: env("STRIPE_API_BASE", "https://api.stripe.com")!,
+    /** Price ids from the Stripe dashboard. Without them checkout charges the plan's listed price directly. */
+    prices: { creator: env("STRIPE_PRICE_CREATOR"), pro: env("STRIPE_PRICE_PRO") },
+    /**
+     * Tax category of the plans when checkout creates the product itself:
+     * a cloud-hosted AI service for personal use. Stripe requires one on
+     * accounts with Managed Payments, and uses it to work out sales tax.
+     */
+    taxCode: env("STRIPE_TAX_CODE", "txcd_10105001")!,
+    /** Accounts that get Pro without paying (comma-separated emails). */
+    compEmails: (env("COMP_EMAILS") ?? "")
+      .split(",")
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean),
+  },
+
+  /**
    * Speech providers.
    * - `provider` speaks stock voices. ElevenLabs streams audio (first sound in
    *   ~250 ms) and is used whenever a key is set; MiniMax on fal is the

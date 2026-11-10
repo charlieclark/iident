@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 import type { AvatarPlayer } from "@/lib/avatar/player";
-import { api, ownerUrl, type Avatar } from "@/lib/client/api";
+import { api, ApiError, ownerUrl, type Avatar } from "@/lib/client/api";
 import { useClientValue } from "@/lib/client/useClientValue";
 import { AvatarChat } from "@/components/AvatarChat";
 import { Backdrop } from "@/components/Backdrop";
@@ -168,10 +170,20 @@ function Ready({ avatar, token, onChange, goTo }: StepProps) {
           <p className="text-xs text-ink-500">Changes to the voice and persona go live right away.</p>
           {avatar.published && (
             <p className="mt-3 border-t border-ink-100 pt-3 text-xs text-ink-600">
-              <span className="font-medium text-ink-900">{avatar.usage.replies}</span>
+              <span className="font-medium text-ink-900">{avatar.usage.used}</span>
               {avatar.usage.limit > 0 ? ` of ${avatar.usage.limit}` : ""} replies to visitors this month
-              {avatar.usage.limit > 0 && avatar.usage.replies >= avatar.usage.limit && (
-                <span className="text-amber-700"> · limit reached, your avatar answers in text only until next month</span>
+              {avatar.usage.paused ? (
+                <span className="text-amber-700">
+                  <span> · paused: your account has no plan, so your avatar isn&apos;t answering. </span>
+                  <Link href={`/pricing?next=${encodeURIComponent(`/create?id=${avatar.id}`)}`} className="font-medium underline">
+                    See plans
+                  </Link>
+                </span>
+              ) : (
+                avatar.usage.limit > 0 &&
+                avatar.usage.used >= avatar.usage.limit && (
+                  <span className="text-amber-700"> · limit reached, your avatar answers in text only until next month</span>
+                )
               )}
             </p>
           )}
@@ -186,6 +198,9 @@ function PublishCard({ avatar, token, onChange }: { avatar: Avatar; token: strin
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [needsUpgrade, setNeedsUpgrade] = useState(false);
+  const router = useRouter();
+  const here = `/create?id=${avatar.id}`;
   const origin = useClientValue(() => window.location.origin, "");
   const url = avatar.slug ? `${origin}/a/${avatar.slug}` : "";
 
@@ -196,7 +211,11 @@ function PublishCard({ avatar, token, onChange }: { avatar: Avatar; token: strin
       const { avatar: next } = await api.publish(avatar.id, token, slug, published);
       onChange(next);
     } catch (e) {
-      setError((e as Error).message);
+      const status = e instanceof ApiError ? e.status : 0;
+      // Publishing needs an account with a plan (when payments are switched on).
+      if (status === 401) router.push(`/login?next=${encodeURIComponent(here)}`);
+      else setError((e as Error).message);
+      setNeedsUpgrade(status === 402);
     } finally {
       setBusy(false);
     }
@@ -255,7 +274,16 @@ function PublishCard({ avatar, token, onChange }: { avatar: Avatar; token: strin
       </Field>
       {!avatar.persona.name && <Notice tone="warn">Add a name in the Persona step first.</Notice>}
       {!avatar.voice && <Notice tone="warn">No voice yet: visitors will hear a stock voice.</Notice>}
-      {error && <Notice tone="error">{error}</Notice>}
+      {error && (
+        <Notice tone="error">
+          <span>{error}</span>
+          {needsUpgrade && (
+            <Link href={`/pricing?next=${encodeURIComponent(here)}`} className="ml-1 font-medium underline">
+              See plans
+            </Link>
+          )}
+        </Notice>
+      )}
       <Button className="w-full" size="lg" loading={busy} disabled={slug.length < 3 || !avatar.persona.name} onClick={() => publish(true)}>
         Publish
       </Button>
