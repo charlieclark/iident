@@ -300,12 +300,74 @@ export async function computeFaceRig(
   return { rig, preview: preview.toDataURL("image/png") };
 }
 
+/**
+ * Moves the inner-lip landmarks onto the line where the closed lips meet.
+ *
+ * The detector puts them a little way onto each lip, and a mouth opened
+ * along them would cut into the lips. Under each pair of landmarks the seam
+ * is the darkest row between the lips in the picture; a median across
+ * neighbours drops the odd column that latched onto something else.
+ */
+function onLipSeam(ctx: CanvasRenderingContext2D, lms: { x: number; y: number }[]): { x: number; y: number }[] {
+  const out = lms.map((p) => ({ x: p.x, y: p.y }));
+  const n = LM.innerUpper.length;
+  const seam: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const upper = lms[LM.innerUpper[i]];
+    const lower = lms[LM.innerLower[i]];
+    const mid = (upper.y + lower.y) / 2;
+    // Corners are a single point already.
+    if (i === 0 || i === n - 1) {
+      seam.push(mid);
+      continue;
+    }
+    // Look only within the lips: partway to their outer edges.
+    const top = mid - 0.6 * Math.max(0, mid - lms[LM.outerUpper[i]].y);
+    const bottom = mid + 0.6 * Math.max(0, lms[LM.outerLower[i]].y - mid);
+    const x = Math.round(((upper.x + lower.x) / 2) * SIZE);
+    const y0 = Math.max(0, Math.floor(top * SIZE));
+    const rows = Math.min(SIZE - y0, Math.ceil(bottom * SIZE) - y0 + 1);
+    if (rows < 3) {
+      seam.push(mid);
+      continue;
+    }
+    const data = ctx.getImageData(Math.max(0, x - 2), y0, 5, rows).data;
+    const luma = Array.from({ length: rows }, (_, r) => {
+      let sum = 0;
+      for (let c = 0; c < 5; c++) {
+        const k = (r * 5 + c) * 4;
+        sum += 0.299 * data[k] + 0.587 * data[k + 1] + 0.114 * data[k + 2];
+      }
+      return sum / 5;
+    });
+    let best = mid;
+    let bestScore = Infinity;
+    for (let r = 1; r < rows - 1; r++) {
+      const y = (y0 + r) / SIZE;
+      // Darkness, with a slight preference for staying near where the detector put the mouth.
+      const score = (luma[r - 1] + 2 * luma[r] + luma[r + 1]) / 4 + 40 * (Math.abs(y - mid) / Math.max(bottom - top, 1e-6));
+      if (score < bestScore) {
+        bestScore = score;
+        best = y;
+      }
+    }
+    seam.push(best);
+  }
+  for (let i = 1; i < n - 1; i++) {
+    const y = [seam[i - 1], seam[i], seam[i + 1]].sort((a, b) => a - b)[1];
+    out[LM.innerUpper[i]].y = y;
+    out[LM.innerLower[i]].y = y;
+  }
+  return out;
+}
+
 function rigFromLandmarks(
-  lms: { x: number; y: number }[],
+  detected: { x: number; y: number }[],
   toGeometry: (p: { x: number; y: number }) => Vec3 | null,
   ctx: CanvasRenderingContext2D,
   meshName: string,
 ): FaceRig | null {
+  const lms = onLipSeam(ctx, detected);
   const get = (i: number) => toGeometry(lms[i]);
   const list = (ids: number[]) => ids.map(get);
   const all = <T,>(xs: (T | null)[]): xs is T[] => xs.every((x) => x !== null);
@@ -323,7 +385,20 @@ function rigFromLandmarks(
     const lower = list(e.lower);
     if (!inner || !outer || !all(upper) || !all(lower)) return null;
     const c = new THREE.Vector3(...inner).add(new THREE.Vector3(...outer)).multiplyScalar(0.5);
-    return { center: [c.x, c.y, c.z], inner, outer, upper, lower };
+    return { center: [c.x, c.y, c.z], inner, outer, upper, lower, ...irisOf(e) };
+  };
+  // The detector reports each iris as a centre and four points on its rim.
+  const irisOf = (e: typeof LM.eyeA): Pick<EyeRig, "iris"> => {
+    if (lms.length < 478) return {};
+    const middle = { x: (lms[e.inner].x + lms[e.outer].x) / 2, y: (lms[e.inner].y + lms[e.outer].y) / 2 };
+    const near = (i: number) => Math.hypot(lms[i].x - middle.x, lms[i].y - middle.y);
+    const first = near(468) < near(473) ? 468 : 473;
+    const center = get(first);
+    const rim = [1, 2, 3, 4].map((k) => get(first + k));
+    if (!center || !all(rim)) return {};
+    const c = new THREE.Vector3(...center);
+    const radius = rim.reduce((sum, p) => sum + c.distanceTo(new THREE.Vector3(...p)), 0) / rim.length;
+    return { iris: { center, radius } };
   };
   const eyeA = eye(LM.eyeA);
   const eyeB = eye(LM.eyeB);

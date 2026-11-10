@@ -44,6 +44,8 @@ export type EyeRig = {
   center: Vec3;
   inner: Vec3;
   outer: Vec3;
+  /** Centre of the iris and its radius (rigs made before eyes could move have none). */
+  iris?: { center: Vec3; radius: number };
   /** Upper and lower lid contours, ordered inner -> outer. */
   upper: Vec3[];
   lower: Vec3[];

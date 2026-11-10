@@ -5,6 +5,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
+import { bakeEyeAtlas, type EyeAtlas } from "./eyeAtlas";
 import { FaceDriver } from "./faceDriver";
 import { findCharacterMesh } from "./faceRigger";
 import { LipSync } from "./lipsync";
@@ -51,6 +52,7 @@ export class AvatarPlayer {
   private headHeight = 1.55;
   /** A head-and-shoulders model with no skeleton: the head is moved by the face driver instead of bones and clips. */
   private bust = false;
+  private eyes: EyeAtlas | null = null;
   private shadow: THREE.Object3D;
   private lights: { key: THREE.DirectionalLight; rim: THREE.DirectionalLight; fill: THREE.HemisphereLight; ambient: THREE.AmbientLight };
 
@@ -237,7 +239,9 @@ export class AvatarPlayer {
 
   applyFaceRig(rig: FaceRig) {
     if (!this.mesh || this.face) return;
-    this.face = new FaceDriver(this.mesh, rig, { blinks: this.options.blinks !== false, headMotion: this.bust });
+    // A bust's eyes are redrawn from a picture of them, so they can glance and blink with real eyelids.
+    this.eyes = this.bust ? bakeEyeAtlas(this.renderer, this.mesh, rig) : null;
+    this.face = new FaceDriver(this.mesh, rig, { blinks: this.options.blinks !== false, headMotion: this.bust, eyes: this.eyes });
   }
 
   /** Whether the loaded model is a head-and-shoulders bust. */
@@ -271,7 +275,10 @@ export class AvatarPlayer {
     this.rest.clear();
     this.headRestInv = null;
     this.mesh = null;
+    this.face?.dispose();
     this.face = null;
+    this.eyes?.dispose();
+    this.eyes = null;
     this.mixer = null;
     this.actions.clear();
     this.current = null;
@@ -728,11 +735,14 @@ export class AvatarPlayer {
   }
 
   /** Developer override for expressions and head pose on a bust (testing). */
-  debugPose: { smile?: number; brow?: number; yaw?: number; pitch?: number; roll?: number } | null = null;
+  debugPose: { smile?: number; brow?: number; yaw?: number; pitch?: number; roll?: number; gazeX?: number; gazeY?: number } | null = null;
   /** Developer override: behave as if speaking (or not) while the mouth is driven by `debugMouth`. */
   debugSpeaking: boolean | null = null;
 
   private pose = { yaw: 0, pitch: 0, roll: 0, smile: 0, brow: 0 };
+  private gaze = { x: 0, y: 0 };
+  /** A brief look away: where to, until when, and when the next one starts. */
+  private glance = { x: 0, y: 0, until: 0, next: 3 };
   private gesture = { yaw: 0, pitch: 0, roll: 0, next: 0 };
   private stress = 0;
   private nodAt = 4;
@@ -799,11 +809,41 @@ export class AvatarPlayer {
     p.brow += (target.brow - p.brow) * ease(target.brow > p.brow ? 14 : 4);
 
     const d = this.debugPose;
-    face.state.head.yaw = d?.yaw ?? p.yaw;
-    face.state.head.pitch = d?.pitch ?? p.pitch;
-    face.state.head.roll = d?.roll ?? p.roll;
+    const head = face.state.head;
+    head.yaw = d?.yaw ?? p.yaw;
+    head.pitch = d?.pitch ?? p.pitch;
+    head.roll = d?.roll ?? p.roll;
     face.state.smile = d?.smile ?? p.smile;
     face.state.brow = d?.brow ?? p.brow;
+
+    // Eyes. They stay on the viewer while the head moves, which is most of
+    // what makes a face look attentive: the eyes turn back by as much as the
+    // head (and the viewer's own position) turns away.
+    const azimuth = Math.atan2(toCam.x, toCam.z);
+    const elevation = Math.atan2(toCam.y, Math.hypot(toCam.x, toCam.z));
+    let gx = (azimuth - head.yaw) * EYE_TURN;
+    let gy = (elevation - head.pitch) * EYE_TURN;
+    // And now and then they flick away for a moment, as eyes do; longer and further while thinking.
+    const g = this.glance;
+    if (t > g.next) {
+      const thinking = this.mood === "thinking" && !speaking;
+      g.x = thinking ? 0.2 : (Math.random() - 0.5) * 0.22;
+      g.y = thinking ? 0.1 : (Math.random() - 0.5) * 0.1;
+      g.until = t + (thinking ? 1.2 : 0.25 + Math.random() * 0.5);
+      g.next = g.until + (speaking ? 1.8 : 1.2) + Math.random() * 3;
+    }
+    if (t < g.until) {
+      gx += g.x;
+      gy += g.y;
+    }
+    gx = THREE.MathUtils.clamp(gx, -0.3, 0.3);
+    gy = THREE.MathUtils.clamp(gy, -0.16, 0.16);
+    // Eyes jump between targets; they don't glide.
+    const snap = ease(30);
+    this.gaze.x += (gx - this.gaze.x) * snap;
+    this.gaze.y += (gy - this.gaze.y) * snap;
+    face.state.gaze.x = d?.gazeX ?? this.gaze.x;
+    face.state.gaze.y = d?.gazeY ?? this.gaze.y;
   }
 
   /** PNG snapshot of the current view (used for share thumbnails). */
@@ -847,6 +887,9 @@ const LIGHTING = {
   figure: { key: 1.9, rim: 1.1, fill: 0.6, environment: 0.75, ambient: 0 },
   bust: { key: 0.35, rim: 0.1, fill: 0, environment: 0.1, ambient: 2.45 },
 };
+
+/** Iris travel, in half eye-widths, per radian the eye turns (an eyeball is a little under one half eye-width in radius). */
+const EYE_TURN = 0.9;
 
 /** Height of a head-and-shoulders bust at life size, in metres. */
 const BUST_HEIGHT = 0.46;
