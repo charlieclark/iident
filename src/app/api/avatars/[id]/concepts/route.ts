@@ -23,8 +23,8 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) throw new HttpError(400, "Invalid appearance options.");
   const { appearance, kind } = parsed.data;
-  // Drafts cost under a cent, so they get a much higher allowance.
-  if (kind === "preview") rateLimit(req, "preview", 90);
+  // Drafts cost under a cent and redraw as the look changes, so they get a higher per-minute allowance.
+  if (kind === "preview") rateLimit(req, "preview", 20);
   else rateLimit(req, "generate", 12);
   const record = requireOwner(req, id);
   if (!record.selfie) throw new HttpError(400, "Upload a selfie first.");
