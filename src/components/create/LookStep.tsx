@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ACCESSORIES,
   BOTTOMS,
@@ -13,7 +13,6 @@ import {
   OUTERWEAR,
   OUTFIT_PRESETS,
   SHOES,
-  STYLES,
   TOPS,
   type Appearance,
 } from "@/lib/avatar/options";
@@ -21,14 +20,6 @@ import { api, ownerUrl } from "@/lib/client/api";
 import { Button, Card, Chip, cx, Field, inputClass, Notice, SectionTitle, Segmented, Spinner, Swatches } from "@/components/ui";
 import { BuildCard } from "./BuildStatus";
 import type { StepProps } from "./CreateFlow";
-
-const STYLE_TINTS: Record<string, string> = {
-  animated: "from-amber-100 to-rose-100",
-  realistic: "from-stone-200 to-stone-100",
-  toy: "from-sky-100 to-violet-100",
-  anime: "from-pink-100 to-indigo-100",
-  clay: "from-orange-100 to-lime-100",
-};
 
 type Slot = "top" | "outer" | "bottom" | "shoes";
 const SLOTS: { id: Slot; label: string; items: readonly { id: string; label: string }[] }[] = [
@@ -42,7 +33,8 @@ const pick = <T,>(xs: readonly T[]) => xs[Math.floor(Math.random() * xs.length)]
 
 export function LookStep({ avatar, token, onChange, goTo }: StepProps) {
   const [look, setLook] = useState<Appearance>(avatar.appearance);
-  const [generating, setGenerating] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
   const [refining, setRefining] = useState(false);
   const [building, setBuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,17 +46,52 @@ export function LookStep({ avatar, token, onChange, goTo }: StepProps) {
   const selectedConcept = avatar.concepts.find((c) => c.id === selected) ?? null;
   const builtFrom = avatar.model?.conceptId;
 
-  async function generate() {
-    setGenerating(true);
+  // Quick sketches follow the look as it changes: the first one is drawn on
+  // arrival, later ones a moment after the last change. `drawn` is the look
+  // the newest picture shows, so nothing is redrawn without a change.
+  const lookKey = JSON.stringify(look);
+  const drawn = useRef<string | null>(avatar.concepts.length ? JSON.stringify(avatar.appearance) : null);
+  const draft = useRef<AbortController | null>(null);
+  useEffect(() => {
+    if (lookKey === drawn.current || finalizing || refining) return;
+    const timer = setTimeout(
+      async () => {
+        draft.current?.abort();
+        const ctrl = new AbortController();
+        draft.current = ctrl;
+        setDrafting(true);
+        setError(null);
+        try {
+          const { avatar: next, created } = await api.drawCharacter(avatar.id, token, look, "preview", ctrl.signal);
+          drawn.current = lookKey;
+          onChange(next);
+          setSelected(created[0] ?? null);
+        } catch (e) {
+          if (!ctrl.signal.aborted) setError((e as Error).message);
+        } finally {
+          if (draft.current === ctrl) setDrafting(false);
+        }
+      },
+      drawn.current === null ? 200 : 1100,
+    );
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lookKey, finalizing, refining]);
+  useEffect(() => () => draft.current?.abort(), []);
+
+  async function finalize() {
+    draft.current?.abort();
+    setFinalizing(true);
     setError(null);
     try {
-      const { avatar: next, created } = await api.generateConcepts(avatar.id, token, look);
+      const { avatar: next, created } = await api.drawCharacter(avatar.id, token, look, "final");
+      drawn.current = lookKey;
       onChange(next);
       setSelected(created[0] ?? null);
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setGenerating(false);
+      setFinalizing(false);
     }
   }
 
@@ -109,8 +136,8 @@ export function LookStep({ avatar, token, onChange, goTo }: StepProps) {
   }
 
   const slotValue = look[slot];
-  const latest = avatar.concepts.slice(0, 4);
-  const history = avatar.concepts.slice(4);
+  const isFinal = selectedConcept?.kind === "final";
+  const recent = avatar.concepts.slice(0, 8);
   const modelBusy = !!avatar.model && avatar.model.status !== "ready" && avatar.model.status !== "failed";
 
   return (
@@ -120,31 +147,9 @@ export function LookStep({ avatar, token, onChange, goTo }: StepProps) {
           <p className="text-sm font-medium text-accent-600">Step 2</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">Design your character</h1>
           <p className="mt-2 max-w-xl text-ink-600">
-            Pick a style, body and outfit. We&apos;ll draw a few versions of you, then turn your favorite into a 3D
-            character that can move and talk.
+            Try bodies, hair and outfits: a quick sketch of you updates as you go. When you like it, we draw your final
+            character with close attention to your face, then turn it into 3D.
           </p>
-        </div>
-
-        <div>
-          <SectionTitle title="Style" />
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-            {STYLES.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => set({ style: s.id })}
-                aria-pressed={look.style === s.id}
-                className={cx(
-                  "rounded-2xl border bg-gradient-to-br p-3 text-left transition-all",
-                  STYLE_TINTS[s.id],
-                  look.style === s.id ? "border-accent-500 ring-2 ring-accent-200" : "border-transparent hover:border-ink-200",
-                )}
-              >
-                <span className="block text-sm font-semibold text-ink-900">{s.label}</span>
-                <span className="block text-xs text-ink-600">{s.hint}</span>
-              </button>
-            ))}
-          </div>
         </div>
 
         <div className="grid gap-6 sm:grid-cols-2">
@@ -300,43 +305,59 @@ export function LookStep({ avatar, token, onChange, goTo }: StepProps) {
               <img src={ownerUrl(avatar.selfieUrl, token)} alt="" className="size-11 rounded-full object-cover" />
             )}
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold">Your looks</p>
-              <p className="text-xs text-ink-500">Generate, pick one, then tweak it with words.</p>
+              <p className="text-sm font-semibold">{isFinal ? "Your character" : "Quick sketch"}</p>
+              <p className="text-xs text-ink-500">
+                {finalizing
+                  ? "Drawing your final character. About 30 seconds."
+                  : isFinal
+                    ? "Happy with it? Tweak it with words, or bring it to life."
+                    : "Updates as you change things. Your final character will look more like you."}
+              </p>
             </div>
-            <Button onClick={generate} loading={generating} variant={avatar.concepts.length ? "secondary" : "primary"}>
-              {avatar.concepts.length ? "Regenerate" : "Generate"}
-            </Button>
+            {drafting && <Spinner className="size-4 text-ink-400" />}
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            {generating &&
-              [0, 1].map((i) => (
-                <div key={i} className="grid aspect-[9/16] animate-pulse place-items-center rounded-2xl bg-gradient-to-b from-ink-100 to-ink-50 text-xs text-ink-400">
-                  Drawing…
-                </div>
-              ))}
-            {latest.map((c) => (
-              <ConceptTile key={c.id} url={ownerUrl(c.imageUrl, token)} selected={c.id === selected} built={c.id === builtFrom} onClick={() => setSelected(c.id)} />
-            ))}
-            {!generating && !latest.length && (
-              <div className="col-span-2 grid aspect-[16/10] place-items-center rounded-2xl border border-dashed border-ink-200 px-6 text-center text-sm text-ink-500">
-                Your character sheets will appear here. Each takes about 15 seconds.
+          <div className="relative mx-auto mt-4 aspect-[2/3] w-full max-w-[320px] overflow-hidden rounded-2xl bg-white">
+            {selectedConcept ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={ownerUrl(selectedConcept.imageUrl, token)}
+                alt={isFinal ? "Your character" : "Quick sketch of your character"}
+                className={cx("size-full object-contain transition-opacity", (drafting || finalizing) && "opacity-50")}
+              />
+            ) : (
+              <div className="grid size-full animate-pulse place-items-center bg-gradient-to-b from-ink-100 to-ink-50 px-6 text-center text-sm text-ink-500">
+                Sketching you…
               </div>
+            )}
+            {finalizing && (
+              <div className="absolute inset-0 grid place-items-center">
+                <span className="flex items-center gap-2 rounded-full bg-ink-900/80 px-3.5 py-2 text-xs font-medium text-white">
+                  <Spinner className="size-3.5" /> Drawing your final character
+                </span>
+              </div>
+            )}
+            {isFinal && !finalizing && (
+              <span className="absolute left-2 top-2 rounded-full bg-accent-500 px-2 py-0.5 text-[10px] font-medium text-white">Final</span>
             )}
           </div>
 
-          {history.length > 0 && (
-            <details className="mt-3">
-              <summary className="cursor-pointer text-xs text-ink-500">Earlier versions ({history.length})</summary>
-              <div className="mt-2 grid grid-cols-4 gap-1.5">
-                {history.map((c) => (
-                  <ConceptTile key={c.id} url={ownerUrl(c.imageUrl, token)} selected={c.id === selected} built={c.id === builtFrom} onClick={() => setSelected(c.id)} small />
-                ))}
-              </div>
-            </details>
+          {recent.length > 1 && (
+            <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1">
+              {recent.map((c) => (
+                <ConceptTile
+                  key={c.id}
+                  url={ownerUrl(c.imageUrl, token)}
+                  selected={c.id === selected}
+                  final={c.kind === "final"}
+                  built={c.id === builtFrom}
+                  onClick={() => setSelected(c.id)}
+                />
+              ))}
+            </div>
           )}
 
-          {selectedConcept && (
+          {isFinal && (
             <div className="mt-4 flex gap-2">
               <input
                 className={inputClass}
@@ -358,39 +379,41 @@ export function LookStep({ avatar, token, onChange, goTo }: StepProps) {
             </div>
           )}
 
-          <Button
-            size="lg"
-            className="mt-4 w-full"
-            disabled={!selected || modelBusy}
-            loading={building}
-            onClick={build}
-            variant="dark"
-          >
-            {builtFrom && builtFrom !== selected
-              ? "Rebuild 3D with this look"
-              : builtFrom === selected && avatar.model?.status === "failed"
-                ? "Try building again"
-                : builtFrom === selected && avatar.model?.status === "ready"
-                  ? "Rebuild 3D"
-                  : "Bring it to life in 3D"}
-          </Button>
-          <p className="mt-2 text-center text-xs text-ink-500">
-            Building takes a few minutes. You&apos;ll set up your voice and persona meanwhile.
-          </p>
+          {isFinal ? (
+            <>
+              <Button size="lg" className="mt-4 w-full" disabled={modelBusy || finalizing} loading={building} onClick={build} variant="dark">
+                {builtFrom && builtFrom !== selected
+                  ? "Rebuild 3D with this look"
+                  : builtFrom === selected && avatar.model?.status === "failed"
+                    ? "Try building again"
+                    : builtFrom === selected && avatar.model?.status === "ready"
+                      ? "Rebuild 3D"
+                      : "Bring it to life in 3D"}
+              </Button>
+              <div className="mt-2 flex items-center justify-between text-xs text-ink-500">
+                <span>Building takes a few minutes.</span>
+                <button type="button" className="underline hover:text-ink-800 disabled:opacity-50" disabled={finalizing} onClick={finalize}>
+                  Draw it again
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <Button size="lg" className="mt-4 w-full" disabled={!selectedConcept || drafting} loading={finalizing} onClick={finalize}>
+                Create my character
+              </Button>
+              <p className="mt-2 text-center text-xs text-ink-500">Takes about 30 seconds. You can still tweak it afterwards.</p>
+            </>
+          )}
         </Card>
         {avatar.model && <BuildCard avatar={avatar} />}
         {avatar.model?.status === "failed" && (
-          <Notice tone="warn">Try building again, or pick a different look. Full-body images with a plain background work best.</Notice>
+          <Notice tone="warn">Try building again, or draw your character again first.</Notice>
         )}
         {modelBusy && (
           <Button variant="secondary" className="w-full" onClick={() => goTo(avatar.voice ? "persona" : "voice")}>
             Continue while it builds
           </Button>
-        )}
-        {generating && (
-          <p className="flex items-center justify-center gap-2 text-xs text-ink-500">
-            <Spinner className="size-3" /> Drawing your character sheets
-          </p>
         )}
       </aside>
     </div>
@@ -400,31 +423,32 @@ export function LookStep({ avatar, token, onChange, goTo }: StepProps) {
 function ConceptTile({
   url,
   selected,
+  final,
   built,
   onClick,
-  small,
 }: {
   url: string;
   selected: boolean;
+  final: boolean;
   built: boolean;
   onClick: () => void;
-  small?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={selected}
+      title={final ? "Final character" : "Quick sketch"}
       className={cx(
-        "relative overflow-hidden rounded-2xl border-2 bg-white transition-all",
-        selected ? "border-accent-500 shadow-lift" : "border-transparent hover:border-ink-200",
-        small ? "aspect-[9/16]" : "aspect-[9/16]",
+        "relative aspect-[2/3] w-12 shrink-0 overflow-hidden rounded-lg border-2 bg-white transition-all",
+        selected ? "border-accent-500" : "border-transparent hover:border-ink-200",
+        !final && "opacity-70",
       )}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={url} alt="Character concept" className="size-full object-contain" />
-      {built && !small && (
-        <span className="absolute left-2 top-2 rounded-full bg-ink-900/80 px-2 py-0.5 text-[10px] font-medium text-white">3D</span>
+      <img src={url} alt="" className="size-full object-contain" />
+      {(final || built) && (
+        <span className={cx("absolute right-0.5 top-0.5 size-2 rounded-full", built ? "bg-ink-900" : "bg-accent-500")} />
       )}
     </button>
   );

@@ -16,7 +16,10 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
   requireFal();
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) throw new HttpError(400, "Pick a concept first.");
-  if (!record.concepts.some((c) => c.id === parsed.data.conceptId)) throw new HttpError(404, "Concept not found.");
+  const concept = record.concepts.find((c) => c.id === parsed.data.conceptId);
+  if (!concept) throw new HttpError(404, "Concept not found.");
+  // Drafts are low resolution and looser on likeness; the model is built from a final render.
+  if (concept.kind === "preview") throw new HttpError(400, "Create your final character first.");
   if (isJobRunning(id)) throw new HttpError(409, "Your character is already being built.");
 
   const job = startModelJob(id, parsed.data.conceptId, heightMeters(record.appearance.height));

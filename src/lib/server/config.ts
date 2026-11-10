@@ -56,9 +56,15 @@ export const config = {
   voiceCloning: env("VOICE_CLONING") !== "off",
 
   models: {
-    /** Selfie + outfit -> full-body character sheet. */
-    concept: env("FAL_CONCEPT_MODEL", "fal-ai/nano-banana-2/edit")!,
-    conceptVariants: Number(env("CONCEPT_VARIANTS", "2")),
+    /**
+     * Selfie + look -> the final full-body character image the 3D model is
+     * built from. GPT Image 2.6 kept faces far better than the alternatives
+     * in a six-face bake-off (docs/character-pipeline.md), in about 25 s.
+     */
+    concept: env("FAL_CONCEPT_MODEL", "openai/gpt-image-2.6/flare/edit")!,
+    conceptQuality: env("CONCEPT_QUALITY", "high")!,
+    /** Quick drafts while trying looks: under a cent and a few seconds each. */
+    preview: env("FAL_PREVIEW_MODEL", "blackforestlabs/flux-3/klein/edit-image")!,
     /** Character sheet -> textured A-pose mesh. */
     imageTo3d: env("FAL_IMAGE_TO_3D_MODEL", "meshy/v7.1/image-to-3d")!,
     /** Mesh -> humanoid rig + animation clips. */

@@ -5,7 +5,7 @@ import { Logo } from "@/components/ui";
 
 const STEPS = [
   { title: "Snap a selfie", body: "One clear photo is enough to capture your likeness." },
-  { title: "Style your character", body: "Pick an art style, body type and outfit, then tweak it in plain words." },
+  { title: "Try on looks", body: "See yourself sketched in seconds as you change hair and outfits, then get a final character that really looks like you." },
   { title: "Lend it your voice", body: "Read a short script and your avatar speaks with a clone of your voice." },
   { title: "Share one link", body: "Give it a persona. Anyone with the link can talk to your 3D twin." },
 ];
@@ -50,17 +50,17 @@ export default function Home() {
           <div className="relative mx-auto h-[460px] w-full max-w-[460px] sm:h-[540px]">
             <div className="absolute inset-x-6 bottom-0 top-10 rounded-[3rem] bg-gradient-to-b from-accent-100 via-peach-100 to-paper" />
             <Image
-              src="/examples/animated-2.webp"
+              src="/examples/house-2.webp"
               alt="Example avatar"
-              width={520}
-              height={858}
+              width={453}
+              height={1000}
               preload
               className="absolute bottom-6 left-2 h-[80%] w-auto animate-float drop-shadow-xl"
             />
             <Image
-              src="/examples/animated-1.webp"
+              src="/examples/house-1.webp"
               alt="Example avatar"
-              width={497}
+              width={462}
               height={1000}
               preload
               className="absolute bottom-0 right-4 h-[90%] w-auto animate-float drop-shadow-xl [animation-delay:-3s]"

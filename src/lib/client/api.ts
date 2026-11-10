@@ -70,11 +70,13 @@ export const api = {
     form.set("consent", "true");
     return request<{ avatar: Avatar }>(`/api/avatars/${id}/selfie`, { method: "POST", token, body: form });
   },
-  generateConcepts: (id: string, token: string, appearance: Appearance) =>
+  /** "preview": a quick draft of the look. "final": the high-likeness render the 3D model is built from. */
+  drawCharacter: (id: string, token: string, appearance: Appearance, kind: "preview" | "final", signal?: AbortSignal) =>
     request<{ avatar: Avatar; created: string[] }>(`/api/avatars/${id}/concepts`, {
       method: "POST",
       token,
-      body: JSON.stringify({ appearance }),
+      body: JSON.stringify({ appearance, kind }),
+      signal,
     }),
   refineConcept: (id: string, token: string, conceptId: string, instruction: string) =>
     request<{ avatar: Avatar; created: string[] }>(`/api/avatars/${id}/concepts/refine`, {

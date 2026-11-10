@@ -95,7 +95,12 @@ export function ownerView(r: AvatarRecord) {
     persona: r.persona,
     context: r.context,
     selfieUrl: r.selfie ? fileUrl(r.selfie.file) : null,
-    concepts: r.concepts.map((c) => ({ id: c.id, imageUrl: fileUrl(c.file), parentId: c.parentId ?? null })),
+    concepts: r.concepts.map((c) => ({
+      id: c.id,
+      imageUrl: fileUrl(c.file),
+      kind: c.kind ?? ("final" as const),
+      parentId: c.parentId ?? null,
+    })),
     selectedConceptId: r.selectedConceptId ?? null,
     model: r.model
       ? {

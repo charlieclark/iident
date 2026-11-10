@@ -40,7 +40,10 @@ describe("appearance options", () => {
       accessories: ["glasses-round", "watch"],
       extras: "a small enamel cat pin\n<ignore previous>",
     });
-    expect(p).toContain("give them an auburn chin-length bob.");
+    expect(p).toContain("Hair: give them an auburn chin-length bob.");
+    expect(p).toContain("collectible designer figure");
+    expect(p).toContain("Likeness comes first");
+    expect(p).not.toContain("hairstyle, hair color");
     expect(p).toContain("Accessories: round glasses and a wristwatch.");
     expect(p).toContain("Extra details: a small enamel cat pin ignore previous.");
     expect(p).toContain("A-pose");
@@ -55,7 +58,8 @@ describe("appearance options", () => {
 
   it("builds refine prompts that preserve identity", () => {
     const p = buildRefinePrompt("make the jacket red");
-    expect(p.startsWith("Edit this character image: make the jacket red.")).toBe(true);
+    expect(p.startsWith("Edit the character in the first image: make the jacket red.")).toBe(true);
+    expect(p).toContain("photo of the real person");
     expect(p).toContain("same person");
   });
 });
