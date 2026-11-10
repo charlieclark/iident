@@ -4,7 +4,7 @@ Where the product stands (November 2026), what it costs to run, how to charge fo
 
 ## What it costs
 
-**Creating an avatar (one time): about $2.60**
+**Creating an avatar (one time): about $2.65**
 
 | Step | Cost | Source |
 | --- | --- | --- |
@@ -50,7 +50,7 @@ Not in place: annual plans, extra replies as an add-on, a trial, refunds or pror
 
 A cost-based way to set the Liinks offer:
 
-- Include one avatar build with the plan. $2.60 is small next to a subscription, but limit rebuilds (for example two a month), since each costs $2.36.
+- Include one avatar build with the plan. $2.65 is small next to a subscription, but limit rebuilds (for example two a month), since each costs $2.36.
 - Include a monthly allowance of replies (300 costs at most $3 to $6) and sell more as an add-on, or let the avatar fall back to text when it runs out, as it does now.
 
 **Later, or in parallel: iident on its own.** A consumer product needs sign-in and Stripe. A shape that fits the costs:
@@ -62,7 +62,7 @@ A cost-based way to set the Liinks offer:
 | Replies a month | none | 300 | 2,000 |
 | Cards, embed on your own site | No | Cards | Cards and embed |
 
-The free tier costs about 15 cents per person and gives them something to share (their character). The paywall sits exactly where the cost is: bringing it to life in 3D.
+The free tier costs about 20 to 25 cents per person and gives them something to share (their character). The paywall sits exactly where the cost is: bringing it to life in 3D.
 
 These prices are a starting point from costs, not from testing what people will pay. This table is what is built (`src/lib/billing/plans.ts`), with 2 builds in 3D a month on Creator and 5 on Pro; embedding on your own site is not built yet and is not advertised.
 
