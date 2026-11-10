@@ -1,4 +1,5 @@
 import "server-only";
+import { resolveBackdrop } from "@/lib/avatar/backdrop";
 import type { AvatarRecord, PublicAvatar } from "@/lib/avatar/types";
 import { HttpError } from "./config";
 import { getAvatar, verifyEditToken } from "./db";
@@ -89,6 +90,7 @@ export function validateSlug(slug: string): string | null {
 export function ownerView(r: AvatarRecord) {
   return {
     usage: { ...usageOf(r), limit: monthlyReplyLimit() },
+    backdrop: resolveBackdrop(r.backdrop, fileUrl),
     id: r.id,
     slug: r.slug,
     published: r.published,
@@ -140,5 +142,6 @@ export function publicView(r: AvatarRecord): PublicAvatar | null {
     faceRig: r.faceRig ?? null,
     thumbnailUrl: r.thumbnail ? fileUrl(r.thumbnail) : null,
     hasVoice: !!r.voice,
+    backdrop: resolveBackdrop(r.backdrop, fileUrl),
   };
 }

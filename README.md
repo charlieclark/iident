@@ -36,7 +36,9 @@ All of it lives in bind-pose geometry space, so it follows the head through ever
 
 **6. Showing things.** Next to the persona, the creator gives the avatar a context: free-text knowledge (facts, FAQs) and a catalog of items it can show, each a link, product, video or image with a stable id (`src/lib/avatar/context.ts`). The catalog goes into the system prompt and Claude gets one tool, `show_items`, which it calls with up to three ids after its spoken sentence. The server drops unknown ids and streams a `show` event with the cards, which appear under the reply while the avatar is still talking (`src/components/ItemCard.tsx`). YouTube, Vimeo and video files play inline, and the avatar stops talking when they do. The avatar has no other links, so it can't invent one.
 
-**7. Runtime polish** (`src/lib/avatar/player.ts`). Library clips often turn the body away from the camera, so each clip's average hips yaw is measured and removed at load. A head look-at measures the animated head direction every frame and corrects toward the viewer. Clip selection is mood-driven: listening idle, a head-scratch only if a reply takes over 1.2 s, rotating talk gestures while speaking, and a wave on greeting.
+**7. Background.** The 3D canvas is transparent, so what sits behind the avatar is a CSS layer the creator picks on the share step (`src/lib/avatar/backdrop.ts`): one of nine gradients, a color of their own, an uploaded picture, or a scene generated from a short description (FLUX.3 klein, under a cent, about 4 seconds). Each backdrop has a tone, measured from the color or picture, that switches the page's text and chat between light and dark.
+
+**8. Runtime polish** (`src/lib/avatar/player.ts`). Library clips often turn the body away from the camera, so each clip's average hips yaw is measured and removed at load. A head look-at measures the animated head direction every frame and corrects toward the viewer. Clip selection is mood-driven: listening idle, a head-scratch only if a reply takes over 1.2 s, rotating talk gestures while speaking, and a wave on greeting.
 
 ## What to expect
 

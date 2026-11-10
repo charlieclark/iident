@@ -5,9 +5,11 @@ import type { AvatarPlayer } from "@/lib/avatar/player";
 import { api, ownerUrl, type Avatar } from "@/lib/client/api";
 import { useClientValue } from "@/lib/client/useClientValue";
 import { AvatarChat } from "@/components/AvatarChat";
+import { Backdrop } from "@/components/Backdrop";
 import { AvatarStage } from "@/components/AvatarStage";
-import { Button, Card, Field, inputClass, Notice, Segmented, Spinner } from "@/components/ui";
+import { Button, Card, cx, Field, inputClass, Notice, Segmented, Spinner } from "@/components/ui";
 import { BuildCard } from "./BuildStatus";
+import { BackdropPicker } from "./BackdropPicker";
 import type { StepProps } from "./CreateFlow";
 
 const toSlug = (s: string) =>
@@ -67,6 +69,7 @@ function Ready({ avatar, token, onChange, goTo }: StepProps) {
   const [framing, setFraming] = useState<"portrait" | "full">("portrait");
   const rigStarted = useRef(false);
   const glasses = avatar.appearance.accessories.some((a) => a.includes("glasses"));
+  const dark = avatar.backdrop.tone === "dark";
 
   const onReady = useCallback(
     async (p: AvatarPlayer) => {
@@ -101,12 +104,13 @@ function Ready({ avatar, token, onChange, goTo }: StepProps) {
   return (
     <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
       <Card className="relative overflow-hidden">
+        <Backdrop backdrop={avatar.backdrop} />
         <AvatarStage
           modelUrl={avatar.model!.url!}
           faceRig={avatar.faceRig}
           framing={framing}
           blinks={!glasses}
-          className="stage-bg h-[68vh] min-h-[460px]"
+          className="h-[68vh] min-h-[460px]"
           onReady={onReady}
         />
         {rigging && (
@@ -126,7 +130,12 @@ function Ready({ avatar, token, onChange, goTo }: StepProps) {
             onChange={setFraming}
           />
         </div>
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-paper via-paper/70 to-transparent p-4 pt-16">
+        <div
+          className={cx(
+            "absolute inset-x-0 bottom-0 bg-gradient-to-t to-transparent p-4 pt-16",
+            dark ? "from-[#121117] via-[#121117]/70" : "from-paper via-paper/70",
+          )}
+        >
           <AvatarChat
             slug={avatar.slug ?? avatar.id}
             previewId={avatar.id}
@@ -134,6 +143,7 @@ function Ready({ avatar, token, onChange, goTo }: StepProps) {
             name={avatar.persona.name}
             language={avatar.persona.language}
             player={rigging ? null : player}
+            dark={dark}
             className="mx-auto max-w-xl"
           />
         </div>
@@ -141,6 +151,7 @@ function Ready({ avatar, token, onChange, goTo }: StepProps) {
 
       <aside className="space-y-4">
         <PublishCard avatar={avatar} token={token} onChange={onChange} />
+        <BackdropPicker avatar={avatar} token={token} onChange={onChange} />
         <Card className="space-y-2 p-4 text-sm">
           <p className="font-medium">Make changes</p>
           <div className="flex flex-wrap gap-2">
