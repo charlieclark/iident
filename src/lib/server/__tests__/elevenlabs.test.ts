@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { wholeSamples } from "../elevenlabs";
+import { wholeSamples } from "../pcm";
 
 function streamOf(chunks: number[][]) {
   return new ReadableStream<Uint8Array>({

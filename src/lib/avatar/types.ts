@@ -119,15 +119,18 @@ export type ModelJob = {
   meshReused?: boolean;
 };
 
-export type SpeechProvider = "elevenlabs" | "minimax";
+export type SpeechProvider = "elevenlabs" | "minimax" | "fish";
 
 export type VoiceProfile = {
   mode: "clone" | "preset";
   /** Which service the voice id belongs to. Records from before ElevenLabs support have none (MiniMax). */
   provider?: SpeechProvider;
+  /** Stock voice id, or the provider's clone id. Empty for Fish clones spoken straight from the recording. */
   voiceId: string;
   sampleFile?: string;
   sampleUrl?: string;
+  /** What is said in the recording; Fish needs it to clone from the recording on each request. */
+  sampleText?: string;
   previewUrl?: string;
   createdAt: number;
 };

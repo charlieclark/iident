@@ -12,20 +12,25 @@ const SCRIPT =
   "On a typical day you'll find me juggling a few projects, grabbing a coffee, and probably talking a little too fast. " +
   "Ask me anything you like, and I'll do my best to answer just the way I would in person.";
 
-/** Stock voices come from the server so they match the configured speech provider. */
-function useStockVoices() {
-  const [voices, setVoices] = useState<{ id: string; label: string }[] | null>(null);
+type StockVoice = { id: string; label: string };
+
+/**
+ * Stock voices come from the server so they match the configured speech
+ * provider, along with whether cloning a recorded voice is offered at all.
+ */
+function useVoiceOptions() {
+  const [options, setOptions] = useState<{ voices: StockVoice[]; cloning: boolean } | null>(null);
   useEffect(() => {
     let alive = true;
     fetch("/api/voices")
       .then((r) => r.json())
-      .then((d: { voices: { id: string; label: string }[] }) => alive && setVoices(d.voices))
-      .catch(() => alive && setVoices([]));
+      .then((d: { voices: StockVoice[]; cloning?: boolean }) => alive && setOptions({ voices: d.voices, cloning: !!d.cloning }))
+      .catch(() => alive && setOptions({ voices: [], cloning: false }));
     return () => {
       alive = false;
     };
   }, []);
-  return voices;
+  return options;
 }
 
 const MIN_SECONDS = 10;
@@ -38,30 +43,43 @@ function play(url: string) {
 }
 
 export function VoiceStep({ avatar, token, onChange, goTo }: StepProps) {
+  const options = useVoiceOptions();
+  // Cloning is on unless the server turns it off; assume on while loading.
+  const cloning = options?.cloning ?? true;
   const [mode, setMode] = useState<"record" | "preset">(avatar.voice?.mode === "preset" ? "preset" : "record");
+  const recording = cloning && mode === "record";
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_400px]">
       <section>
         <p className="text-sm font-medium text-accent-600">Step 3</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">Give it your voice</h1>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">{cloning ? "Give it your voice" : "Pick a voice"}</h1>
         <p className="mt-2 max-w-xl text-ink-600">
-          Read a short script and your avatar will speak in a clone of your voice. Prefer not to? Pick a stock voice.
+          {cloning
+            ? "Read a short script and your avatar will speak in a clone of your voice. Prefer not to? Pick a stock voice."
+            : "Choose the voice your avatar speaks with. Tap Play to hear it say your greeting."}
         </p>
+        {cloning && (
+          <div className="mt-6">
+            <Segmented
+              value={mode}
+              options={[
+                { id: "record", label: "My voice" },
+                { id: "preset", label: "Stock voice" },
+              ]}
+              onChange={setMode}
+            />
+          </div>
+        )}
+        {!cloning && avatar.voice?.mode === "clone" && (
+          <div className="mt-6">
+            <Notice>Voice cloning is turned off, so your avatar uses a stock voice. Pick the one you like.</Notice>
+          </div>
+        )}
         <div className="mt-6">
-          <Segmented
-            value={mode}
-            options={[
-              { id: "record", label: "My voice" },
-              { id: "preset", label: "Stock voice" },
-            ]}
-            onChange={setMode}
-          />
-        </div>
-        <div className="mt-6">
-          {mode === "record" ? (
+          {recording ? (
             <RecordVoice avatar={avatar} token={token} onChange={onChange} />
           ) : (
-            <PresetVoices avatar={avatar} token={token} onChange={onChange} />
+            <PresetVoices voices={options?.voices ?? null} avatar={avatar} token={token} onChange={onChange} />
           )}
         </div>
         <div className="mt-8 flex gap-3">
@@ -77,14 +95,24 @@ export function VoiceStep({ avatar, token, onChange, goTo }: StepProps) {
       </section>
       <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
         <BuildCard avatar={avatar} />
-        <Card className="p-4 text-sm text-ink-600">
-          <p className="font-medium text-ink-900">Tips for a great clone</p>
-          <ul className="mt-2 list-disc space-y-1 pl-5">
-            <li>Find a quiet room without echo.</li>
-            <li>Speak naturally, as you would to a friend.</li>
-            <li>15 to 30 seconds is plenty.</li>
-          </ul>
-        </Card>
+        {recording ? (
+          <Card className="p-4 text-sm text-ink-600">
+            <p className="font-medium text-ink-900">Tips for a great clone</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              <li>Find a quiet room without echo.</li>
+              <li>Speak naturally, as you would to a friend.</li>
+              <li>15 to 30 seconds is plenty.</li>
+            </ul>
+          </Card>
+        ) : (
+          <Card className="p-4 text-sm text-ink-600">
+            <p className="font-medium text-ink-900">About voices</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              <li>Every voice is a synthetic stock voice. Nobody&apos;s real voice is copied.</li>
+              <li>You can switch any time, and your live page updates right away.</li>
+            </ul>
+          </Card>
+        )}
       </aside>
     </div>
   );
@@ -268,8 +296,17 @@ function VoicePreviewButton({ avatar, token }: { avatar: Avatar; token: string }
   );
 }
 
-function PresetVoices({ avatar, token, onChange }: { avatar: Avatar; token: string; onChange: (a: Avatar) => void }) {
-  const voices = useStockVoices();
+function PresetVoices({
+  voices,
+  avatar,
+  token,
+  onChange,
+}: {
+  voices: StockVoice[] | null;
+  avatar: Avatar;
+  token: string;
+  onChange: (a: Avatar) => void;
+}) {
   const [playing, setPlaying] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const current = avatar.voice?.mode === "preset" ? avatar.voice.voiceId : null;

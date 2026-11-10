@@ -1,5 +1,8 @@
 import "server-only";
 import { config, HttpError } from "./config";
+import { PCM_SAMPLE_RATE, wholeSamples } from "./pcm";
+
+export { PCM_SAMPLE_RATE };
 
 /**
  * ElevenLabs: instant voice cloning plus streaming text to speech.
@@ -11,7 +14,6 @@ import { config, HttpError } from "./config";
  */
 
 const API = "https://api.elevenlabs.io";
-export const PCM_SAMPLE_RATE = 24000;
 
 /** A small, varied set of ElevenLabs default voices for the stock voice picker. */
 export const ELEVENLABS_VOICES = [
@@ -108,34 +110,6 @@ export async function* streamSpeech(r: SpeechRequest): AsyncGenerator<Uint8Array
   );
   if (!res.ok || !res.body) throw await failure(res, "speech");
   yield* wholeSamples(res.body);
-}
-
-/** Re-chunks a byte stream so no 16-bit sample is split across chunks. */
-export async function* wholeSamples(body: ReadableStream<Uint8Array>): AsyncGenerator<Uint8Array> {
-  const reader = body.getReader();
-  let carry: number | null = null;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!value?.length) continue;
-      let bytes = value;
-      if (carry !== null) {
-        const merged = new Uint8Array(bytes.length + 1);
-        merged[0] = carry;
-        merged.set(bytes, 1);
-        bytes = merged;
-        carry = null;
-      }
-      if (bytes.length % 2) {
-        carry = bytes[bytes.length - 1];
-        bytes = bytes.subarray(0, bytes.length - 1);
-      }
-      if (bytes.length) yield bytes;
-    }
-  } finally {
-    reader.releaseLock();
-  }
 }
 
 /** A whole clip as MP3, for short previews. */

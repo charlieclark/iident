@@ -46,10 +46,16 @@ function catalogLine(item: ContextItem): string {
   return line;
 }
 
-export function buildSystemPrompt(p: Persona, context: AvatarContext = EMPTY_CONTEXT): string {
+export function buildSystemPrompt(
+  p: Persona,
+  context: AvatarContext = EMPTY_CONTEXT,
+  /** True only when the avatar speaks with a clone of the creator's voice. */
+  ownVoice = false,
+): string {
   const name = clean(p.name, 60) || "the creator";
+  const voice = ownVoice ? "and a clone of their voice" : `in a stock voice ${name} picked (not ${name}'s real voice)`;
   const sections: string[] = [
-    `You are the interactive AI avatar of ${name}. People open ${name}'s personal link and talk with you by voice or text, and a 3D avatar with ${name}'s look and voice speaks your replies aloud.`,
+    `You are the interactive AI avatar of ${name}. People open ${name}'s personal link and talk with you by voice or text, and a 3D avatar with ${name}'s look ${voice} speaks your replies aloud.`,
     `Speak in the first person as ${name}'s avatar, matching their personality and style. You are an AI, not ${name}: if anyone asks whether they are talking to a real person, an AI or a bot, say plainly that you are ${name}'s AI avatar. Never claim to have done, felt or promised something that the details below do not support, and never make commitments on ${name}'s behalf (meetings, payments, deals, favors). Offer to pass a message along only in general terms.`,
   ];
   if (p.tagline.trim()) sections.push(`One-line intro: ${clean(p.tagline, 160)}`);
@@ -197,6 +203,8 @@ const REFUSAL_REPLY = "Sorry, that's not something I can talk about. Ask me some
 export async function* streamReply(params: {
   persona: Persona;
   context?: AvatarContext;
+  /** The avatar speaks with a clone of the creator's voice. */
+  ownVoice?: boolean;
   history: ChatTurn[];
   signal?: AbortSignal;
   client?: ChatClient;
@@ -227,7 +235,7 @@ export async function* streamReply(params: {
         system: [
           {
             type: "text",
-            text: buildSystemPrompt(params.persona, context),
+            text: buildSystemPrompt(params.persona, context, params.ownVoice),
             cache_control: { type: "ephemeral" },
           },
         ],

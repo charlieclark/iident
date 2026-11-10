@@ -14,18 +14,44 @@ export const config = {
   falKey: env("FAL_KEY"),
   anthropicKey: env("ANTHROPIC_API_KEY"),
   elevenLabsKey: env("ELEVENLABS_API_KEY"),
+  fishKey: env("FISH_API_KEY"),
 
   /**
-   * Speech provider. ElevenLabs streams audio (first sound in ~250 ms) and is
-   * used whenever a key is set; MiniMax on fal is the fallback, which returns
-   * whole clips through fal's queue (several seconds per sentence).
+   * Speech providers.
+   * - `provider` speaks stock voices. ElevenLabs streams audio (first sound in
+   *   ~250 ms) and is used whenever a key is set; MiniMax on fal is the
+   *   fallback, which returns whole clips through fal's queue.
+   * - `cloneProvider` holds and speaks cloned voices. Fish Audio is preferred
+   *   when its key is set: it has no voice slots, where every ElevenLabs clone
+   *   takes one (30 on the Creator plan) plus a monthly quota of new clones.
    */
   tts: {
     provider: (env("TTS_PROVIDER") ?? (env("ELEVENLABS_API_KEY") ? "elevenlabs" : "minimax")) as
       | "elevenlabs"
       | "minimax",
+    cloneProvider: (env("CLONE_PROVIDER") ??
+      (env("FISH_API_KEY") ? "fish" : env("ELEVENLABS_API_KEY") ? "elevenlabs" : "minimax")) as
+      | "fish"
+      | "elevenlabs"
+      | "minimax",
     elevenLabsModel: env("ELEVENLABS_MODEL", "eleven_v4_turbo")!,
+    fishModel: env("FISH_MODEL", "s2.1-pro")!,
+    /**
+     * "inline" sends the creator's recording with every request, so nothing
+     * is stored at Fish and there is no limit. "model" saves it once as a
+     * private voice model; Fish caps API-created models by prepaid credit.
+     */
+    fishVoiceMode: env("FISH_VOICE_MODE", "inline") as "inline" | "model",
+    /** "balanced" favors time to first audio; "normal" favors stability. */
+    fishLatency: env("FISH_LATENCY", "balanced")!,
   },
+
+  /**
+   * Cloning a creator's voice from a recording. On unless VOICE_CLONING=off,
+   * a switch for turning it off quickly: then avatars speak with stock
+   * voices, recordings are refused and existing clones are never spoken.
+   */
+  voiceCloning: env("VOICE_CLONING") !== "off",
 
   models: {
     /** Selfie + outfit -> full-body character sheet. */
