@@ -88,6 +88,12 @@ export type Concept = {
   /** Local copy, served from /api/files. */
   file: string;
   prompt: string;
+  /**
+   * "preview": a quick, cheap draft for trying looks. "final": the
+   * high-likeness render the 3D model is built from. Concepts from before
+   * previews existed have no kind and count as final.
+   */
+  kind?: "preview" | "final";
   parentId?: string;
   createdAt: number;
 };

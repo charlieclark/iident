@@ -11,43 +11,18 @@ import { z } from "zod";
  * background, nothing held in the hands).
  */
 
-export const STYLES = [
-  {
-    id: "animated",
-    label: "Animated",
-    hint: "Feature-film look",
-    prompt:
-      "a modern animated feature film (stylized but grounded proportions, soft clean shading, appealing friendly design)",
-  },
-  {
-    id: "realistic",
-    label: "Realistic",
-    hint: "Lifelike game character",
-    prompt:
-      "a high-end realistic 3D video game character (true-to-life proportions, natural skin, detailed but clean materials)",
-  },
-  {
-    id: "toy",
-    label: "Collectible",
-    hint: "Vinyl toy figure",
-    prompt:
-      "a premium collectible vinyl toy figure (slightly larger head, smooth matte surfaces, simplified clean details)",
-  },
-  {
-    id: "anime",
-    label: "Anime",
-    hint: "Cel-shaded 3D anime",
-    prompt:
-      "a 3D anime game character (cel-shaded look, clean shapes, expressive but natural eyes)",
-  },
-  {
-    id: "clay",
-    label: "Clay",
-    hint: "Handmade claymation",
-    prompt:
-      "a handmade claymation character (soft sculpted clay texture, rounded forms, charming stop-motion look)",
-  },
-] as const;
+/**
+ * The one look every iident character shares: a collectible figure of the
+ * real person, about five heads tall. Chosen from a bake-off (see
+ * docs/character-pipeline.md): the larger head gives the image and the 3D
+ * mesh more face to work with, the sculpted finish avoids the uncanny look
+ * of a photographic face, and it scored highest on face likeness.
+ */
+export const HOUSE_STYLE =
+  "a collectible designer figure of the real person, sculpted and rendered in 3D: stylized proportions about five heads tall " +
+  "(a noticeably larger head on a compact body with slightly shortened legs), a faithfully sculpted face with softly stylized " +
+  "smooth matte skin and gently painted detail instead of photographic pores, hair as clean sculpted volumes, clothing with " +
+  "clean simplified folds and matte fabric texture";
 
 export const BUILDS = [
   { id: "slim", label: "Slim", prompt: "slim, slender build" },
@@ -204,7 +179,6 @@ export const HAIR_COLORS = [
 
 type Ids<T extends readonly { id: string }[]> = T[number]["id"];
 
-export type StyleId = Ids<typeof STYLES>;
 export type BuildId = Ids<typeof BUILDS>;
 export type HeightId = Ids<typeof HEIGHTS>;
 export type HairStyleId = Ids<typeof HAIR_STYLES>;
@@ -221,7 +195,6 @@ const ids = <T extends readonly { id: string }[]>(list: T) =>
   list.map((x) => x.id) as unknown as [Ids<T>, ...Ids<T>[]];
 
 export const appearanceSchema = z.object({
-  style: z.enum(ids(STYLES)),
   build: z.enum(ids(BUILDS)),
   height: z.enum(ids(HEIGHTS)),
   hair: z.object({
@@ -241,7 +214,6 @@ export const appearanceSchema = z.object({
 export type Appearance = z.infer<typeof appearanceSchema>;
 
 export const DEFAULT_APPEARANCE: Appearance = {
-  style: "animated",
   build: "average",
   height: "average",
   hair: { keep: true, style: "short-crop", color: "dark-brown" },
@@ -390,18 +362,21 @@ export function describeOutfit(a: Appearance): string {
  * rigs well; change it carefully.
  */
 export function buildConceptPrompt(a: Appearance): string {
-  const style = find(STYLES, a.style);
   const build = find(BUILDS, a.build);
   const height = find(HEIGHTS, a.height);
 
-  const identity = a.hair.keep
-    ? "Keep their face, skin tone, hairstyle, hair color and identity clearly recognizable."
-    : `Keep their face, skin tone and identity clearly recognizable, but give them ${fixArticles(find(HAIR_STYLES, a.hair.style).prompt.replace("{c}", find(HAIR_COLORS, a.hair.color).name))}.`;
-
+  // Spelling out the features to keep roughly doubled measured face likeness
+  // compared with a general "keep them recognizable".
+  const hair = a.hair.keep
+    ? "hairline, hairstyle, hair color and any facial hair"
+    : "and any facial hair";
   const lines = [
-    `Turn the person in this photo into a full-body 3D character in the style of ${style.prompt}.`,
-    identity,
+    `Turn the person in this photo into a full-body 3D character in this style: ${HOUSE_STYLE}.`,
+    `Likeness comes first: keep their exact face shape, jawline, nose, eye shape and spacing, eyebrows, lips, skin tone, ${hair}, plus distinguishing details such as glasses, moles, freckles and piercings, so that friends would recognize them instantly. Keep their apparent age and do not beautify or slim the face.`,
   ];
+  if (!a.hair.keep) {
+    lines.push(`Hair: give them ${fixArticles(find(HAIR_STYLES, a.hair.style).prompt.replace("{c}", find(HAIR_COLORS, a.hair.color).name))}.`);
+  }
   const facial = find(FACIAL_HAIR, a.facialHair).prompt;
   if (facial) lines.push(`Facial hair: ${facial}.`);
   lines.push(`Body type: ${build.prompt}, ${height.prompt}.`);
@@ -418,14 +393,19 @@ export function buildConceptPrompt(a: Appearance): string {
 const POSE_AND_FRAMING =
   "Pose: neutral A-pose, standing straight, facing the camera, arms straight and angled about 30 degrees away from the body, palms facing the thighs, empty hands, feet slightly apart. " +
   "Expression: relaxed and neutral with lips gently closed, eyes open looking at the camera. " +
-  "Full figure visible from head to shoes, centered, orthographic front view, plain pure white background, no props, no text, no floor shadow.";
+  "Full figure visible from head to shoes, centered, orthographic front view, flat even studio lighting, plain pure white background, no props, no text, no floor shadow.";
 
-/** Prompt for "edit this concept" requests (e.g. "make the jacket red"). */
+/**
+ * Prompt for "edit this character" requests (e.g. "make the jacket red").
+ * The character image goes first and the selfie second, so the face stays
+ * anchored to the real person through repeated edits.
+ */
 export function buildRefinePrompt(instruction: string): string {
   const change = sanitizeExtras(instruction);
   return (
-    `Edit this character image: ${change}. ` +
+    `Edit the character in the first image: ${change}. ` +
     "Keep everything else exactly the same: same person, face, identity, art style, proportions and outfit except for the requested change. " +
+    "The second image is a photo of the real person: use it only to keep the face true to them. " +
     POSE_AND_FRAMING
   );
 }

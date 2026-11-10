@@ -317,8 +317,11 @@ export class AvatarPlayer {
     if (framing === "portrait") {
       // Head and shoulders, with the face in the upper part of the frame so
       // chat UI docked at the bottom doesn't cover it.
-      const span = Math.max(0.92, (h * 0.5) / Math.min(1, aspect * 1.1));
-      target.set(0, this.headHeight - h * 0.07, 0);
+      // Sized from the head itself (head bone to crown), so stylized figures
+      // with larger heads stay fully in frame, with a little air above.
+      const head = Math.max(h - this.headHeight, h * 0.1);
+      const span = Math.max(0.92, h * 0.5, head * 2.3) / Math.min(1, aspect * 1.1);
+      target.set(0, h + head * 0.5 - span / 2, 0);
       const dist = span / 2 / Math.tan(vfov / 2);
       pos.set(0, target.y + 0.03, dist);
     } else {
