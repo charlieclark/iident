@@ -1,16 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { CONTEXT_LIMITS, type AvatarContext } from "@/lib/avatar/context";
 import { PERSONA_TRAITS, type Persona } from "@/lib/avatar/types";
 import { api } from "@/lib/client/api";
 import { Button, Chip, Field, inputClass, Notice } from "@/components/ui";
 import { BuildCard } from "./BuildStatus";
+import { ItemsEditor, savableItems } from "./ItemsEditor";
 import type { StepProps } from "./CreateFlow";
 
 const LANGUAGES = ["English", "Spanish", "French", "German", "Portuguese", "Italian", "Japanese", "Korean", "Chinese", "Hindi"];
 
 export function PersonaStep({ avatar, token, onChange, goTo }: StepProps) {
   const [p, setP] = useState<Persona>(avatar.persona);
+  // Includes items still being filled in; only complete ones are saved.
+  const [ctx, setCtx] = useState<AvatarContext>(avatar.context);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,6 +24,11 @@ export function PersonaStep({ avatar, token, onChange, goTo }: StepProps) {
     setSaved(false);
     setP((x) => ({ ...x, ...patch }));
   };
+  const setContext = (patch: Partial<AvatarContext>) => {
+    setSaved(false);
+    setCtx((x) => ({ ...x, ...patch }));
+  };
+  const body = () => ({ persona: p, context: { ...ctx, items: savableItems(ctx.items) } });
 
   // Autosave a moment after typing stops.
   useEffect(() => {
@@ -29,21 +38,24 @@ export function PersonaStep({ avatar, token, onChange, goTo }: StepProps) {
     }
     const t = setTimeout(async () => {
       try {
-        const { avatar: next } = await api.patch(avatar.id, token, { persona: p });
+        const { avatar: next } = await api.patch(avatar.id, token, body());
         onChange(next);
         setSaved(true);
       } catch {}
     }, 900);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p]);
+  }, [p, ctx]);
 
   async function saveAndContinue() {
     if (!p.name.trim()) return setError("Give your avatar a name.");
+    if (savableItems(ctx.items).length < ctx.items.length) {
+      return setError("Finish or remove the items marked “Not saved yet” first.");
+    }
     setSaving(true);
     setError(null);
     try {
-      const { avatar: next } = await api.patch(avatar.id, token, { persona: p });
+      const { avatar: next } = await api.patch(avatar.id, token, body());
       onChange(next);
       goTo("share");
     } catch (e) {
@@ -116,18 +128,26 @@ export function PersonaStep({ avatar, token, onChange, goTo }: StepProps) {
         </Field>
 
         <Field
-          label="Things to share"
-          hint="Facts, FAQs, links you want visitors to know about. The avatar won't invent things beyond this."
-          counter={`${p.knowledge.length}/8000`}
+          label="What it knows"
+          hint="Facts and FAQs you want visitors to know. The avatar won't invent things beyond this."
+          counter={`${ctx.knowledge.length}/${CONTEXT_LIMITS.knowledge}`}
         >
           <textarea
             className={`${inputClass} min-h-32`}
-            value={p.knowledge}
-            maxLength={8000}
+            value={ctx.knowledge}
+            maxLength={CONTEXT_LIMITS.knowledge}
             placeholder={"Q: What are you working on?\nA: A booking app for climbing gyms.\n\nBest way to reach me: the contact form on my site."}
-            onChange={(e) => set({ knowledge: e.target.value })}
+            onChange={(e) => setContext({ knowledge: e.target.value })}
           />
         </Field>
+
+        <div>
+          <p className="text-sm font-medium text-ink-800">Things it can show</p>
+          <p className="mt-0.5 mb-2 text-xs text-ink-500">
+            Links, products, videos and images your avatar can put on screen while it talks. These are the only links it will ever share.
+          </p>
+          <ItemsEditor items={ctx.items} onChange={(items) => setContext({ items })} />
+        </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Topics to avoid" hint="The avatar will politely steer away.">

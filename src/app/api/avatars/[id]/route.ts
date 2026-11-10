@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { contextSchema } from "@/lib/avatar/context";
 import { appearanceSchema } from "@/lib/avatar/options";
 import { getAvatar, updateAvatar } from "@/lib/server/db";
 import { deleteVoice } from "@/lib/server/elevenlabs";
@@ -20,7 +21,6 @@ const personaSchema = z.object({
   about: z.string().max(4000),
   traits: z.array(z.string().max(24)).max(8),
   speakingStyle: z.string().max(400),
-  knowledge: z.string().max(8000),
   boundaries: z.string().max(1000),
   greeting: z.string().max(300),
   language: z.string().max(40),
@@ -29,6 +29,7 @@ const personaSchema = z.object({
 const patchSchema = z.object({
   appearance: appearanceSchema.optional(),
   persona: personaSchema.optional(),
+  context: contextSchema.optional(),
   consent: z.boolean().optional(),
   voicePreset: z.string().max(64).optional(),
 });
@@ -37,7 +38,10 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/avatars
   const { id } = await ctx.params;
   requireOwner(req, id);
   const parsed = patchSchema.safeParse(await req.json());
-  if (!parsed.success) throw new HttpError(400, parsed.error.issues[0]?.message ?? "Invalid input");
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    throw new HttpError(400, issue ? `${issue.path.join(".")}: ${issue.message}` : "Invalid input");
+  }
   const body = parsed.data;
   if (body.voicePreset && !presetVoices().some((v) => v.id === body.voicePreset)) {
     throw new HttpError(400, "Unknown voice.");
@@ -46,6 +50,7 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/avatars
   const record = updateAvatar(id, (r) => {
     if (body.appearance) r.appearance = body.appearance;
     if (body.persona) r.persona = body.persona;
+    if (body.context) r.context = body.context;
     if (body.consent !== undefined) r.consent = body.consent;
     if (body.voicePreset) {
       r.voice = { mode: "preset", provider: activeProvider(), voiceId: body.voicePreset, createdAt: Date.now() };

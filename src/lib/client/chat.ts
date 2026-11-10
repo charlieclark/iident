@@ -1,5 +1,7 @@
 "use client";
 
+import type { PublicItem } from "@/lib/avatar/context";
+
 export type ChatEvent =
   | { type: "text"; delta: string }
   | { type: "chunk"; index: number; text: string }
@@ -7,10 +9,16 @@ export type ChatEvent =
   | { type: "pcm_end"; index: number }
   | { type: "audio"; index: number; url: string; durationMs: number }
   | { type: "audio_error"; index: number }
-  | { type: "done"; text: string }
+  | { type: "show"; items: PublicItem[] }
+  | { type: "done"; text: string; shown?: string[] }
   | { type: "error"; message: string };
 
-export type ChatMessage = { role: "user" | "assistant"; content: string };
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+  /** Cards the avatar put on screen with this reply. */
+  items?: PublicItem[];
+};
 
 /** POSTs a turn and invokes `onEvent` for each server-sent event. */
 export async function streamChat(
@@ -22,7 +30,13 @@ export async function streamChat(
   const res = await fetch(`/api/chat/${encodeURIComponent(slug)}`, {
     method: "POST",
     headers: { "content-type": "application/json", ...(opts.token ? { "x-edit-token": opts.token } : {}) },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      ...body,
+      // The server only needs the ids of the cards shown, to replay them for the model.
+      messages: body.messages?.map(({ role, content, items }) =>
+        items?.length ? { role, content, shown: items.map((item) => item.id) } : { role, content },
+      ),
+    }),
     signal: opts.signal,
   });
   if (!res.ok || !res.body) {

@@ -1,3 +1,4 @@
+import type { AvatarContext } from "./context";
 import type { Appearance } from "./options";
 
 export type Vec3 = [number, number, number];
@@ -64,7 +65,6 @@ export type Persona = {
   about: string;
   traits: string[];
   speakingStyle: string;
-  knowledge: string;
   boundaries: string;
   greeting: string;
   language: string;
@@ -76,7 +76,6 @@ export const DEFAULT_PERSONA: Persona = {
   about: "",
   traits: ["Warm", "Curious"],
   speakingStyle: "Friendly and conversational, like chatting over coffee.",
-  knowledge: "",
   boundaries: "",
   greeting: "",
   language: "English",
@@ -149,13 +148,18 @@ export type AvatarRecord = {
   thumbnail?: string;
   voice?: VoiceProfile;
   persona: Persona;
+  /** What the avatar knows and can show (see ./context.ts). */
+  context: AvatarContext;
 };
 
 /** The subset of a record that is safe to show to anyone with the link. */
+/** The persona fields a public page needs; the rest stays server-side. */
+export type PublicPersona = Pick<Persona, "name" | "tagline" | "language">;
+
 export type PublicAvatar = {
   id: string;
   slug: string;
-  persona: Persona;
+  persona: PublicPersona;
   modelUrl: string;
   heightMeters: number;
   clips: string[];

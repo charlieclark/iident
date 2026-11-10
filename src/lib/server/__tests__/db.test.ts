@@ -25,6 +25,15 @@ describe("avatar store", () => {
     expect(db.getAvatar(record.id)?.persona.name).toBe("Sam");
   });
 
+  it("moves knowledge from the persona of older records into the context", () => {
+    const legacy = { id: "x", persona: { name: "Sam", knowledge: "Loves trail running." } };
+    const r = db.normalizeRecord(legacy as unknown as Parameters<typeof db.normalizeRecord>[0]);
+    expect(r.persona).toEqual({ name: "Sam" });
+    expect(r.context).toEqual({ knowledge: "Loves trail running.", items: [] });
+    const { record } = db.createAvatar();
+    expect(db.getAvatar(record.id)?.context).toEqual({ knowledge: "", items: [] });
+  });
+
   it("finds published avatars by slug only", () => {
     const { record } = db.createAvatar();
     db.updateAvatar(record.id, (r) => {

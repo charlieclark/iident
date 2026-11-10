@@ -4,7 +4,8 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { DEFAULT_APPEARANCE } from "@/lib/avatar/options";
-import { DEFAULT_PERSONA, type AvatarRecord } from "@/lib/avatar/types";
+import { EMPTY_CONTEXT } from "@/lib/avatar/context";
+import { DEFAULT_PERSONA, type AvatarRecord, type Persona } from "@/lib/avatar/types";
 import { config } from "./config";
 
 /**
@@ -41,7 +42,22 @@ const hashToken = (token: string) => createHash("sha256").update(token).digest("
 
 function parse(row: Row | undefined): AvatarRecord | null {
   if (!row) return null;
-  return JSON.parse(row.data) as AvatarRecord;
+  return normalizeRecord(JSON.parse(row.data));
+}
+
+type StoredRecord = Omit<AvatarRecord, "persona" | "context"> & {
+  persona: Persona & { knowledge?: string };
+  context?: AvatarRecord["context"];
+};
+
+/**
+ * Brings records saved by earlier versions up to the current shape. The
+ * persona used to carry the avatar's knowledge; it now lives in `context`
+ * next to the items the avatar can show.
+ */
+export function normalizeRecord(stored: StoredRecord): AvatarRecord {
+  const { knowledge, ...persona } = stored.persona;
+  return { ...stored, persona, context: stored.context ?? { ...EMPTY_CONTEXT, knowledge: knowledge ?? "" } };
 }
 
 export function createAvatar(): { record: AvatarRecord; editToken: string } {
@@ -58,6 +74,7 @@ export function createAvatar(): { record: AvatarRecord; editToken: string } {
     appearance: DEFAULT_APPEARANCE,
     concepts: [],
     persona: DEFAULT_PERSONA,
+    context: EMPTY_CONTEXT,
   };
   db()
     .prepare(

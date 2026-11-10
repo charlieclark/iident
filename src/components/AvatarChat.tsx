@@ -5,6 +5,8 @@ import type { AvatarPlayer } from "@/lib/avatar/player";
 import { api } from "@/lib/client/api";
 import { Recorder } from "@/lib/client/audio";
 import { streamChat, type ChatMessage } from "@/lib/client/chat";
+import type { PublicItem } from "@/lib/avatar/context";
+import { ItemCard } from "@/components/ItemCard";
 import { Button, cx, Spinner } from "@/components/ui";
 
 type Props = {
@@ -48,12 +50,30 @@ export function AvatarChat({ slug, name, player, previewId, token, language, cla
   const recorder = useRef<Recorder | null>(null);
   const abort = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  /** Follow new content unless the visitor scrolled up to reread. */
+  const pinned = useRef(true);
 
   useEffect(() => player?.onSpeaking(setSpeaking), [player]);
 
+  // Keep the newest message in view as text streams in and card images load.
   useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+    const list = listRef.current;
+    const content = contentRef.current;
+    if (!list || !content) return;
+    const onScroll = () => {
+      pinned.current = list.scrollHeight - list.scrollTop - list.clientHeight < 48;
+    };
+    const observer = new ResizeObserver(() => {
+      if (pinned.current) list.scrollTop = list.scrollHeight;
+    });
+    observer.observe(content);
+    list.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      observer.disconnect();
+      list.removeEventListener("scroll", onScroll);
+    };
+  }, [started]);
 
   async function turn(body: { messages?: ChatMessage[]; greet?: boolean }) {
     if (!player) return;
@@ -65,6 +85,8 @@ export function AvatarChat({ slug, name, player, previewId, token, language, cla
     player.beginReply();
     if (!body.greet) player.setMood("thinking");
     let reply = "";
+    let items: PublicItem[] = [];
+    const update = () => setMessages((m) => [...m.slice(0, -1), { role: "assistant", content: reply, items }]);
     setMessages((m) => [...m, { role: "assistant", content: "" }]);
     try {
       await streamChat(
@@ -73,7 +95,10 @@ export function AvatarChat({ slug, name, player, previewId, token, language, cla
         (e) => {
           if (e.type === "text") {
             reply += e.delta;
-            setMessages((m) => [...m.slice(0, -1), { role: "assistant", content: reply }]);
+            update();
+          } else if (e.type === "show") {
+            items = [...items, ...e.items];
+            update();
           } else if (e.type === "chunk") {
             player.expectSpeech(e.index);
           } else if (e.type === "pcm") {
@@ -94,7 +119,7 @@ export function AvatarChat({ slug, name, player, previewId, token, language, cla
       if (!ctrl.signal.aborted) setError((e as Error).message);
     } finally {
       player.endReply();
-      if (!reply) setMessages((m) => (m[m.length - 1]?.content ? m : m.slice(0, -1)));
+      if (!reply && !items.length) setMessages((m) => (m[m.length - 1]?.content ? m : m.slice(0, -1)));
       setBusy(false);
     }
   }
@@ -115,7 +140,8 @@ export function AvatarChat({ slug, name, player, previewId, token, language, cla
     const content = text.trim();
     if (!content || busy) return;
     setInput("");
-    const history = [...messages.filter((m) => m.content), { role: "user" as const, content }];
+    pinned.current = true;
+    const history = [...messages.filter((m) => m.content || m.items?.length), { role: "user" as const, content }];
     setMessages(history);
     await turn({ messages: history });
   }
@@ -168,19 +194,33 @@ export function AvatarChat({ slug, name, player, previewId, token, language, cla
 
   return (
     <div className={cx("flex flex-col gap-3", className)}>
-      <div ref={listRef} className="max-h-[32vh] space-y-2 overflow-y-auto pr-1" aria-live="polite">
-        {messages.map((m, i) => (
-          <div key={i} className={cx("flex", m.role === "user" ? "justify-end" : "justify-start")}>
-            <div
-              className={cx(
-                "max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed backdrop-blur",
-                m.role === "user" ? "bg-accent-500 text-white" : cx("border", surface),
+      <div ref={listRef} className="max-h-[36vh] overflow-y-auto pr-1" aria-live="polite">
+        <div ref={contentRef} className="space-y-2">
+          {messages.map((m, i) => (
+            <div key={i} className={cx("flex flex-col gap-2", m.role === "user" ? "items-end" : "items-start")}>
+              {(m.content || !m.items?.length) && (
+                <div
+                  className={cx(
+                    "max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed backdrop-blur",
+                    m.role === "user" ? "bg-accent-500 text-white" : cx("border", surface),
+                  )}
+                >
+                  {m.content || <Spinner className="size-3.5 opacity-60" />}
+                </div>
               )}
-            >
-              {m.content || <Spinner className="size-3.5 opacity-60" />}
+              {m.items?.map((item) => (
+                <ItemCard
+                  key={item.id}
+                  item={item}
+                  dark={dark}
+                  className="w-full max-w-[85%] sm:max-w-80"
+                  // Media and the avatar's voice shouldn't talk over each other.
+                  onPlay={() => player?.stopSpeech()}
+                />
+              ))}
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
       {error && <p className={cx("text-xs", dark ? "text-red-300" : "text-red-600")}>{error}</p>}
       <form
