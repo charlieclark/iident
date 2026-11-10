@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, saveDraft, tokenFor, type Avatar } from "@/lib/client/api";
+import { api, ApiError, saveDraft, tokenFor, type Avatar } from "@/lib/client/api";
 import { Button, cx, Logo, Notice, Spinner } from "@/components/ui";
+import { AccountLink } from "@/components/account/AccountLink";
+import { useAccount } from "@/lib/client/account";
 import { BuildStatus } from "./BuildStatus";
 import { LookStep } from "./LookStep";
 import { PersonaStep } from "./PersonaStep";
@@ -45,6 +47,7 @@ export function CreateFlow() {
   const params = useSearchParams();
   const router = useRouter();
   const [avatar, setAvatar] = useState<Avatar | null>(null);
+  // null while loading; "" when the avatar is open through the signed-in account instead of this browser's token.
   const [token, setToken] = useState<string | null>(null);
   const [step, setStep] = useState<Step>("photo");
   const [error, setError] = useState<string | null>(null);
@@ -56,14 +59,20 @@ export function CreateFlow() {
     (async () => {
       try {
         const id = params.get("id");
-        const existing = id ? tokenFor(id) : null;
-        if (id && existing) {
-          const { avatar } = await api.get(id, existing);
-          setAvatar(avatar);
-          setToken(existing);
-          setStep(initialStep(avatar));
-          saveDraft(id, existing);
-          return;
+        if (id) {
+          // This browser's token if it made the avatar, otherwise the account's session.
+          const existing = tokenFor(id) ?? "";
+          const opened = await api.get(id, existing).catch((e) => {
+            if (e instanceof ApiError && (e.status === 403 || e.status === 404)) return null;
+            throw e;
+          });
+          if (opened) {
+            setAvatar(opened.avatar);
+            setToken(existing);
+            setStep(initialStep(opened.avatar));
+            if (existing) saveDraft(id, existing);
+            return;
+          }
         }
         const { avatar, editToken } = await api.create();
         saveDraft(avatar.id, editToken);
@@ -78,7 +87,7 @@ export function CreateFlow() {
 
   // Poll while the 3D character is being built.
   useEffect(() => {
-    if (!avatar || !token || !isBuilding(avatar)) return;
+    if (!avatar || token === null || !isBuilding(avatar)) return;
     const t = setInterval(async () => {
       try {
         const { avatar: next } = await api.get(avatar.id, token);
@@ -103,7 +112,7 @@ export function CreateFlow() {
       </div>
     );
   }
-  if (!avatar || !token) {
+  if (!avatar || token === null) {
     return (
       <div className="grid min-h-dvh place-items-center text-ink-500">
         <Spinner className="size-8 text-accent-500" />
@@ -150,8 +159,9 @@ export function CreateFlow() {
               </button>
             ))}
           </nav>
-          <div className="ml-auto md:ml-0">
+          <div className="ml-auto flex items-center gap-1 md:ml-0">
             <BuildStatus avatar={avatar} onOpen={() => goTo(avatar.model?.status === "ready" ? "share" : "look")} />
+            <AccountLink next={`/create?id=${avatar.id}`} />
           </div>
         </div>
         <nav aria-label="Steps" className="flex gap-1 overflow-x-auto px-4 pb-2.5 md:hidden">
@@ -174,12 +184,30 @@ export function CreateFlow() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+        <SaveReminder avatar={avatar} />
         {step === "photo" && <PhotoStep {...props} />}
         {step === "look" && <LookStep {...props} />}
         {step === "voice" && <VoiceStep {...props} />}
         {step === "persona" && <PersonaStep {...props} />}
         {step === "share" && <ShareStep {...props} />}
       </main>
+    </div>
+  );
+}
+
+/** Once there is something worth keeping, tells a signed-out creator it only lives in this browser. */
+function SaveReminder({ avatar }: { avatar: Avatar }) {
+  const { account } = useAccount();
+  if (!account || account.user || !avatar.concepts.some((c) => c.kind === "final")) return null;
+  return (
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-2xl bg-accent-50 px-4 py-3 text-sm text-accent-800">
+      <span>This avatar is only saved in this browser. Sign in to keep it and open it on any device.</span>
+      <Link
+        href={`/login?next=${encodeURIComponent(`/create?id=${avatar.id}`)}`}
+        className="shrink-0 rounded-full bg-accent-500 px-4 py-1.5 font-medium text-white transition hover:bg-accent-600"
+      >
+        Save to an account
+      </Link>
     </div>
   );
 }

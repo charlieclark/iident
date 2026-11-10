@@ -104,7 +104,9 @@ src/
   app/
     page.tsx                  landing page
     create/page.tsx           the five-step creator
+    login, auth/verify, me    sign in by email link, and the account's avatars
     a/[slug]/page.tsx         public avatar page (Open Graph tags, real 404s)
+    api/auth/..., api/me      sign-in links, sessions, attaching browser drafts to an account
     api/avatars/...           draft CRUD, selfie, concepts, 3D build, face rig, voice, publish
     api/chat/[slug]           SSE conversation: Claude text, streamed speech (PCM), cards to show
     api/voices                stock voices for the active speech provider
@@ -131,15 +133,15 @@ Speech uses ElevenLabs whenever `ELEVENLABS_API_KEY` is set. `ELEVENLABS_MODEL` 
 - Creators must confirm the photo and voice are theirs, or used with permission, before upload or cloning.
 - A cloned voice is the easiest part of an avatar to misuse for impersonation, so cloning has an off switch (`VOICE_CLONING=off`): recordings are then refused, clones made earlier are never spoken, and avatars use stock voices. The persona prompt always tells the model whether it speaks with the person's own voice or a stock voice, so it never claims a stock voice is theirs.
 - The public page labels the avatar as an AI, and the persona prompt requires it to say so when asked, avoid commitments on the person's behalf, stick to the facts the creator provided and never share private contact, financial or health details.
-- Selfies, voice samples and concept images are only served to the owner (edit token); the public page only exposes the 3D model and a thumbnail.
-- Editing is protected by a random edit token stored in the creator's browser (only its hash is stored server-side).
+- Selfies, voice samples and concept images are only served to the owner; the public page only exposes the 3D model and a thumbnail.
+- An avatar can be edited by the browser that created it (a random edit token kept in that browser) and by the account it belongs to. Accounts sign in with a one-time email link (20 minutes, single use, 5 an hour per address) that starts a 60-day session in an httpOnly, SameSite=Lax cookie. Only hashes of edit tokens, link tokens and session tokens are stored. An avatar that belongs to an account can't be claimed by another one.
 - Basic per-IP rate limits protect the expensive endpoints, and each avatar has a monthly cap on replies to visitors (`MONTHLY_REPLY_LIMIT`, default 300): past it, the avatar answers in text only until the next month.
 
 ## Production notes
 
 - **Long-running work.** The 3D build runs in-process via `after()`. Deploy on a persistent Node server (Fly.io, Render, Railway, a VM). On serverless platforms move the job to a queue or use fal webhooks. Jobs interrupted by a restart are surfaced as failed so the user can retry.
 - **Storage and database.** `src/lib/server/storage.ts` (local disk) and `src/lib/server/db.ts` (SQLite) are small, isolated modules; swap them for S3/R2 and Postgres for multi-instance deployments.
-- **Accounts.** Drafts are tied to the browser that created them. Add real auth (and an "edit link" email) before launch.
+- **Accounts.** Sign-in emails go through Resend (`RESEND_API_KEY`, `EMAIL_FROM` on a domain verified there). Without a key, development shows the sign-in link on the page and production refuses to sign anyone in. Set `NEXT_PUBLIC_APP_URL` to the public https address: sign-in links are built from it and the session cookie is marked Secure when it is https.
 - **Costs.** Each avatar uses sketches at under a cent each, one or two final renders at about 4 cents, one image-to-3D run, one rigging run and one voice clone; each reply uses one Claude call (two in the rare case it shows cards before saying anything) and one TTS call per sentence.
 - **Voice cloning at scale.** With `FISH_API_KEY` set, cloned voices are spoken by Fish Audio straight from the creator's recording, which goes with each request, so there is no voice limit and nothing to clean up at Fish. Saved Fish voice models (`FISH_VOICE_MODE=model`) skip re-sending the recording, but Fish caps how many the API can create by prepaid credit (an account with no credit can create none). Fish concurrency also depends on prepaid credit: 5 requests under $100, 15 from $100, 50 from $1,000. Clones made with ElevenLabs instead each take a voice slot for as long as the avatar exists (30 on Creator, 160 on Pro, 660 on Scale, 2,200 on Business, per ElevenLabs' pricing page in November 2026) and count against a monthly quota of new voices (95 on Creator). Stock voices use no slots, and re-recording or switching to a stock voice frees the old clone.
 

@@ -2,7 +2,8 @@ import "server-only";
 import { resolveBackdrop } from "@/lib/avatar/backdrop";
 import type { AvatarRecord, PublicAvatar } from "@/lib/avatar/types";
 import { HttpError } from "./config";
-import { getAvatar, verifyEditToken } from "./db";
+import { canEdit } from "./auth";
+import { getAvatar } from "./db";
 import { fileUrl } from "./storage";
 import { monthlyReplyLimit, usageOf } from "./usage";
 
@@ -28,10 +29,9 @@ export function handle<A extends unknown[]>(fn: (...args: A) => Promise<Response
   };
 }
 
-/** Loads a draft/avatar and checks the caller holds its edit token. */
+/** Loads a draft/avatar and checks the caller may edit it (edit token, or signed in as its owner). */
 export function requireOwner(req: Request, id: string): AvatarRecord {
-  const token = req.headers.get("x-edit-token");
-  if (!verifyEditToken(id, token)) throw new HttpError(403, "You don't have access to this avatar.");
+  if (!canEdit(req, id)) throw new HttpError(403, "You don't have access to this avatar.");
   const record = getAvatar(id);
   if (!record) throw new HttpError(404, "Avatar not found.");
   return record;
@@ -61,6 +61,10 @@ export const RESERVED_SLUGS = new Set([
   "admin",
   "dev",
   "login",
+  "auth",
+  "me",
+  "pricing",
+  "account",
   "signup",
   "settings",
   "about",
@@ -129,6 +133,25 @@ export function ownerView(r: AvatarRecord) {
 }
 
 export type OwnerView = ReturnType<typeof ownerView>;
+
+/** One row of an account's list of avatars. */
+export function summaryView(r: AvatarRecord) {
+  // The character image is private to the owner; the list is only shown to them, signed in.
+  const concept = r.concepts.find((c) => c.id === r.selectedConceptId) ?? r.concepts.findLast((c) => (c.kind ?? "final") === "final");
+  return {
+    id: r.id,
+    name: r.persona.name,
+    slug: r.slug,
+    published: r.published,
+    ready: r.model?.status === "ready",
+    building: !!r.model && r.model.status !== "ready" && r.model.status !== "failed",
+    imageUrl: r.thumbnail ? fileUrl(r.thumbnail) : concept ? fileUrl(concept.file) : null,
+    updatedAt: r.updatedAt,
+    usage: { ...usageOf(r), limit: monthlyReplyLimit() },
+  };
+}
+
+export type AvatarSummary = ReturnType<typeof summaryView>;
 
 export function publicView(r: AvatarRecord): PublicAvatar | null {
   if (!r.published || !r.slug || r.model?.status !== "ready" || !r.model.file) return null;

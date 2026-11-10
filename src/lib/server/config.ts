@@ -17,6 +17,15 @@ export const config = {
   fishKey: env("FISH_API_KEY"),
 
   /**
+   * Sign-in emails go through Resend when a key is set. Without one (local
+   * development) the sign-in link is logged and returned to the page instead.
+   */
+  email: {
+    resendKey: env("RESEND_API_KEY"),
+    from: env("EMAIL_FROM", "iident <login@example.com>")!,
+  },
+
+  /**
    * Speech providers.
    * - `provider` speaks stock voices. ElevenLabs streams audio (first sound in
    *   ~250 ms) and is used whenever a key is set; MiniMax on fal is the
