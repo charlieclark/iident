@@ -45,6 +45,23 @@ describe("appearance options", () => {
     expect(p).not.toContain("animated feature film");
   });
 
+  it("draws from the clean portrait and the selfie together when there is a portrait", () => {
+    const alone = buildConceptPrompt(DEFAULT_APPEARANCE);
+    const both = buildConceptPrompt(DEFAULT_APPEARANCE, { portrait: true });
+    expect(alone).toContain("the person in this photo");
+    expect(both).toContain("the first is a corrected straight-on portrait of them, the second their original selfie");
+    // Either way the model is told not to tidy the person up or copy the photo's expression.
+    for (const p of [alone, both]) {
+      expect(p).toContain("do not make the hair thicker, darker or fuller than it is");
+      expect(p).toContain("do not copy any passing expression from the photo");
+      expect(p).toContain("unfurrowed brow");
+    }
+    // With a chosen hairstyle there is no real hair to match, only the eyebrows.
+    const restyled = buildConceptPrompt({ ...DEFAULT_APPEARANCE, hair: { keep: false, style: "bob", color: "auburn" } });
+    expect(restyled).toContain("Match their real eyebrow weight exactly");
+    expect(restyled).not.toContain("hair thicker");
+  });
+
   it("builds a concept prompt with pose constraints", () => {
     const p = buildConceptPrompt({
       ...DEFAULT_APPEARANCE,

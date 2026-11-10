@@ -49,5 +49,8 @@ describe("character concepts", () => {
       enable_prompt_expansion: false,
     });
     expect(imageEditInput("google/nano-banana-2.1/edit", "p", urls)).toMatchObject({ aspect_ratio: "9:16", resolution: "1K" });
+    // The clean portrait is a square head and shoulders.
+    expect(imageEditInput("openai/gpt-image-2.6/flare/edit", "p", urls, "high", "portrait")).toMatchObject({ image_size: { width: 1024, height: 1024 } });
+    expect(imageEditInput("google/nano-banana-2.1/edit", "p", urls, "high", "portrait")).toMatchObject({ aspect_ratio: "1:1" });
   });
 });

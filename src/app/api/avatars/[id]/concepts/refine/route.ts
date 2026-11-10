@@ -6,6 +6,7 @@ import { updateAvatar } from "@/lib/server/db";
 import type { Concept } from "@/lib/avatar/types";
 import { generateCharacterImage } from "@/lib/server/fal";
 import { HttpError, handle, ownerView, rateLimit, requireOwner } from "@/lib/server/http";
+import { ensurePortrait } from "@/lib/server/portrait";
 import { download, putFile } from "@/lib/server/storage";
 
 const bodySchema = z.object({
@@ -27,7 +28,9 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
 
   const prompt = buildRefinePrompt(parsed.data.instruction);
   // The result is always a final render, with the selfie alongside to keep the face true.
-  const url = await generateCharacterImage({ engine: "main", imageUrls: [base.url, record.selfie.url], prompt });
+  // The clean portrait is the better picture of the person; the selfie stands in if there isn't one.
+  const person = (await ensurePortrait(id)) ?? record.selfie.url;
+  const url = await generateCharacterImage({ engine: "main", imageUrls: [base.url, person], prompt });
   const cid = randomBytes(6).toString("base64url");
   const file = await putFile(id, `concept-${cid}.png`, await download(url));
   const concept: Concept = {

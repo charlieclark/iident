@@ -36,15 +36,32 @@ export async function uploadToFal(data: Uint8Array | Buffer, contentType: string
 }
 
 /** Each image model family takes its size and quality settings differently. */
-export function imageEditInput(model: string, prompt: string, imageUrls: string[], quality = config.models.conceptQuality): Record<string, unknown> {
+export function imageEditInput(
+  model: string,
+  prompt: string,
+  imageUrls: string[],
+  quality = config.models.conceptQuality,
+  /** "figure" is a tall full-body picture, "portrait" a square head and shoulders. */
+  shape: "figure" | "portrait" = "figure",
+): Record<string, unknown> {
   const base = { prompt, image_urls: imageUrls, num_images: 1, output_format: "png" };
+  const square = shape === "portrait";
   if (model.includes("gpt-image")) {
     // Low reasoning effort: planning adds latency and is for dense text and layouts.
-    return { ...base, image_size: { width: 1024, height: 1536 }, quality, reasoning_effort: "low" };
+    return { ...base, image_size: { width: 1024, height: square ? 1024 : 1536 }, quality, reasoning_effort: "low" };
   }
   // The prompt is already complete; letting the model rewrite it doubles the wait (about 6 s instead of 2.5 s).
-  if (model.includes("flux")) return { ...base, image_size: { width: 576, height: 1024 }, enable_prompt_expansion: false };
-  return { ...base, aspect_ratio: "9:16", resolution: "1K" }; // Nano Banana family
+  if (model.includes("flux")) return { ...base, image_size: { width: square ? 768 : 576, height: square ? 768 : 1024 }, enable_prompt_expansion: false };
+  return { ...base, aspect_ratio: square ? "1:1" : "9:16", resolution: "1K" }; // Nano Banana family
+}
+
+/** Selfie -> the same person as a straight-on, evenly lit portrait with a relaxed face. */
+export async function generatePortrait(selfieUrl: string, prompt: string): Promise<string> {
+  const model = config.models.portrait;
+  const out = await run<{ images?: FalFile[] }>(model, imageEditInput(model, prompt, [selfieUrl], "high", "portrait"), { pollInterval: 400 });
+  const url = out.images?.[0]?.url;
+  if (!url) throw new Error("The image model returned no image");
+  return url;
 }
 
 /**

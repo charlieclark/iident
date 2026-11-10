@@ -3,7 +3,7 @@ import { canEdit } from "@/lib/server/auth";
 import { contentTypeFor, getFile } from "@/lib/server/storage";
 
 /** Personal inputs are only served to the owner (edit token in `?t=`, or their signed-in session). */
-const PRIVATE = /^(selfie|voice|concept)-/;
+const PRIVATE = /^(selfie|portrait|voice|concept)-/;
 
 /** Serves stored avatar assets. File names are versioned, so they cache forever. */
 export async function GET(req: Request, ctx: RouteContext<"/api/files/[...key]">) {
