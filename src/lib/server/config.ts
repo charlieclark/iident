@@ -104,6 +104,8 @@ export const config = {
      */
     concept: env("FAL_CONCEPT_MODEL", "openai/gpt-image-2.6/flare/edit")!,
     conceptQuality: env("CONCEPT_QUALITY", "high")!,
+    /** Quality of the first sketch, which the main model draws from the selfie (about 15 s at low). */
+    firstSketchQuality: env("FIRST_SKETCH_QUALITY", "low")!,
     /** Quick drafts while trying looks: under a cent and a few seconds each. */
     preview: env("FAL_PREVIEW_MODEL", "blackforestlabs/flux-3/klein/edit-image")!,
     /** Backdrop scenes from a description (under a cent each). */

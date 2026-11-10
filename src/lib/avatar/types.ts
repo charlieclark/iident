@@ -96,6 +96,15 @@ export type Concept = {
    */
   kind?: "preview" | "final";
   parentId?: string;
+  /**
+   * Which model drew it: "main" draws the person from their selfie in the
+   * house style, "sketch" is the fast model restyling a picture "main" drew.
+   */
+  drawnBy?: "main" | "sketch";
+  /** The house style it was drawn in (STYLE_ID at the time). */
+  style?: string;
+  /** Storage key of the selfie it shows, so a new selfie starts from a new drawing. */
+  selfie?: string;
   createdAt: number;
 };
 

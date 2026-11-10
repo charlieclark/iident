@@ -17,9 +17,9 @@ context ───────┘                     └──► show_items(ids
 
 **1. Photo.** The selfie is checked on-device with MediaPipe Face Landmarker (one clear, front-facing, well-lit face) before it is uploaded.
 
-**2. Look.** Every character shares one house style: a collectible figure of the real person, about five heads tall (`HOUSE_STYLE` in `src/lib/avatar/options.ts`). The creator picks build, height, hair, facial hair, an outfit (presets plus per-piece type and color), accessories and free-text details, and these compile into one prompt that puts likeness first and asks for an A-pose, closed mouth, flat lighting, plain background and empty hands. Those constraints are what make the next steps reliable. Two image models share the work:
-- **Sketches** (FLUX.3 klein, under a cent, 2 to 4 seconds): drawn on arrival and again a moment after every change, so trying outfits feels live.
-- **The final character** (GPT Image 2.6, about 4 cents, 20 to 30 seconds): drawn once the creator is happy, and can be refined in plain words ("make the sneakers red") with the selfie kept alongside so the face stays true. The 3D model is only built from a final.
+**2. Look.** Every character shares one house style: a lead character from a 3D animated film, with the face designed in the same style as the body (`HOUSE_STYLE` in `src/lib/avatar/options.ts`). The creator picks build, height, hair, facial hair, an outfit (presets plus per-piece type and color), accessories and free-text details, and these compile into one prompt that keeps the person recognizable in the style and asks for an A-pose, closed mouth, flat lighting, plain background and empty hands. Those constraints are what make the next steps reliable. Two image models share the work:
+- **Sketches**: the first is drawn from the selfie by the final model at low quality (about 15 seconds, 2 cents). Every later one is FLUX.3 klein restyling that picture with the new look (4 to 7 seconds, under a cent), a moment after every change, so trying outfits feels live and the face stays the same. Asked to draw the person from the selfie itself, the fast model loses them in this style.
+- **The final character** (GPT Image 2.6, about 4 cents, 15 to 30 seconds): drawn once the creator is happy, and can be refined in plain words ("make the sneakers red") with the selfie kept alongside so the face stays true. The 3D model is only built from a final.
 
 The models and style were chosen in a measured bake-off: see [docs/character-pipeline.md](docs/character-pipeline.md).
 
@@ -46,8 +46,9 @@ Measured while building this, using the default models:
 
 | Step | Time |
 | --- | --- |
-| Sketch of a look (FLUX.3 klein) | 2 to 4 s (6 to 9 s end to end in the creator, measured before prompt expansion was turned off) |
-| Final character (GPT Image 2.6, high quality) | 20 to 30 s |
+| First sketch (GPT Image 2.6, low quality) | about 15 s |
+| Sketch of a changed look (FLUX.3 klein) | 4 to 7 s end to end |
+| Final character (GPT Image 2.6, high quality) | 15 to 30 s |
 | 3D mesh + rig + 8 clips (Meshy) | 3 to 13 min, depending on queue load |
 | Speech-to-text (Whisper) | about 2.5 s |
 | Voice clone (Fish Audio: the recording is stored and transcribed) | a few seconds |
@@ -157,7 +158,7 @@ Setting up Stripe: set `STRIPE_SECRET_KEY`; add a webhook endpoint at `/api/bill
 - **Long-running work.** The 3D build runs in-process via `after()`. Deploy on a persistent Node server (Fly.io, Render, Railway, a VM). On serverless platforms move the job to a queue or use fal webhooks. Jobs interrupted by a restart are surfaced as failed so the user can retry.
 - **Storage and database.** `src/lib/server/storage.ts` (local disk) and `src/lib/server/db.ts` (SQLite) are small, isolated modules; swap them for S3/R2 and Postgres for multi-instance deployments.
 - **Accounts.** Sign-in emails go through Resend (`RESEND_API_KEY`, `EMAIL_FROM` on a domain verified there). Without a key, development shows the sign-in link on the page and production refuses to sign anyone in. Set `NEXT_PUBLIC_APP_URL` to the public https address: sign-in links are built from it and the session cookie is marked Secure when it is https.
-- **Costs.** Each avatar uses sketches at under a cent each, one or two final renders at about 4 cents, one image-to-3D run, one rigging run and one voice clone; each reply uses one Claude call (two in the rare case it shows cards before saying anything) and one TTS call per sentence.
+- **Costs.** Each avatar uses a first sketch at 2 cents, later sketches at under a cent each, one or two final renders at about 4 cents, one image-to-3D run, one rigging run and one voice clone; each reply uses one Claude call (two in the rare case it shows cards before saying anything) and one TTS call per sentence.
 - **Voice cloning at scale.** With `FISH_API_KEY` set, cloned voices are spoken by Fish Audio straight from the creator's recording, which goes with each request, so there is no voice limit and nothing to clean up at Fish. Saved Fish voice models (`FISH_VOICE_MODE=model`) skip re-sending the recording, but Fish caps how many the API can create by prepaid credit (an account with no credit can create none). Fish concurrency also depends on prepaid credit: 5 requests under $100, 15 from $100, 50 from $1,000. Clones made with ElevenLabs instead each take a voice slot for as long as the avatar exists (30 on Creator, 160 on Pro, 660 on Scale, 2,200 on Business, per ElevenLabs' pricing page in November 2026) and count against a monthly quota of new voices (95 on Creator). Stock voices use no slots, and re-recording or switching to a stock voice frees the old clone.
 
 Costs, pricing options and what a new user still trips over are written up in [docs/go-to-market.md](docs/go-to-market.md).

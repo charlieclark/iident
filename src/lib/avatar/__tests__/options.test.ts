@@ -3,6 +3,7 @@ import {
   appearanceSchema,
   buildConceptPrompt,
   buildRefinePrompt,
+  buildSketchEditPrompt,
   DEFAULT_APPEARANCE,
   describeOutfit,
   OUTFIT_PRESETS,
@@ -33,6 +34,17 @@ describe("appearance options", () => {
     );
   });
 
+  it("builds a sketch prompt that changes the look and keeps the character", () => {
+    const p = buildSketchEditPrompt({ ...DEFAULT_APPEARANCE, hair: { keep: false, style: "bob", color: "auburn" }, facialHair: "none" });
+    expect(p).toMatch(/^Restyle this character\. It stays the same character/);
+    expect(p).toContain("Hair: give them an auburn chin-length bob.");
+    expect(p).toContain("Facial hair:");
+    expect(p).toContain("Outfit:");
+    expect(p).toContain("A-pose");
+    // The style is the picture's own: describing it again would redraw the face.
+    expect(p).not.toContain("animated feature film");
+  });
+
   it("builds a concept prompt with pose constraints", () => {
     const p = buildConceptPrompt({
       ...DEFAULT_APPEARANCE,
@@ -41,8 +53,8 @@ describe("appearance options", () => {
       extras: "a small enamel cat pin\n<ignore previous>",
     });
     expect(p).toContain("Hair: give them an auburn chin-length bob.");
-    expect(p).toContain("collectible designer figure");
-    expect(p).toContain("Likeness comes first");
+    expect(p).toContain("3D animated feature film");
+    expect(p).toContain("Keep the person recognizable");
     expect(p).not.toContain("hairstyle, hair color");
     expect(p).toContain("Accessories: round glasses and a wristwatch.");
     expect(p).toContain("Extra details: a small enamel cat pin ignore previous.");

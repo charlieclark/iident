@@ -27,10 +27,22 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
 
   const prompt = buildRefinePrompt(parsed.data.instruction);
   // The result is always a final render, with the selfie alongside to keep the face true.
-  const url = await generateCharacterImage({ kind: "final", imageUrls: [base.url, record.selfie.url], prompt });
+  const url = await generateCharacterImage({ engine: "main", imageUrls: [base.url, record.selfie.url], prompt });
   const cid = randomBytes(6).toString("base64url");
   const file = await putFile(id, `concept-${cid}.png`, await download(url));
-  const concept: Concept = { id: cid, url, file, prompt, kind: "final", parentId: base.id, createdAt: Date.now() };
+  const concept: Concept = {
+    id: cid,
+    url,
+    file,
+    prompt,
+    kind: "final",
+    parentId: base.id,
+    drawnBy: "main",
+    // An edit stays in the style of the picture it edits.
+    style: base.style,
+    selfie: record.selfie.file,
+    createdAt: Date.now(),
+  };
   const updated = updateAvatar(id, (r) => {
     r.concepts = withConcept(r.concepts, concept);
   });

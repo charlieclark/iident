@@ -36,11 +36,11 @@ export async function uploadToFal(data: Uint8Array | Buffer, contentType: string
 }
 
 /** Each image model family takes its size and quality settings differently. */
-export function imageEditInput(model: string, prompt: string, imageUrls: string[]): Record<string, unknown> {
+export function imageEditInput(model: string, prompt: string, imageUrls: string[], quality = config.models.conceptQuality): Record<string, unknown> {
   const base = { prompt, image_urls: imageUrls, num_images: 1, output_format: "png" };
   if (model.includes("gpt-image")) {
     // Low reasoning effort: planning adds latency and is for dense text and layouts.
-    return { ...base, image_size: { width: 1024, height: 1536 }, quality: config.models.conceptQuality, reasoning_effort: "low" };
+    return { ...base, image_size: { width: 1024, height: 1536 }, quality, reasoning_effort: "low" };
   }
   // The prompt is already complete; letting the model rewrite it doubles the wait (about 6 s instead of 2.5 s).
   if (model.includes("flux")) return { ...base, image_size: { width: 576, height: 1024 }, enable_prompt_expansion: false };
@@ -48,16 +48,18 @@ export function imageEditInput(model: string, prompt: string, imageUrls: string[
 }
 
 /**
- * Reference photo(s) + prompt -> one full-body character image. "preview" is
- * the quick draft model, "final" the high-likeness one.
+ * Reference image(s) + prompt -> one full-body character image. "main" is
+ * the model that draws the person in the house style (at the final quality
+ * unless told otherwise); "sketch" is the fast, cheap one.
  */
 export async function generateCharacterImage(params: {
-  kind: "preview" | "final";
+  engine: "main" | "sketch";
   imageUrls: string[];
   prompt: string;
+  quality?: string;
 }): Promise<string> {
-  const model = params.kind === "preview" ? config.models.preview : config.models.concept;
-  const out = await run<{ images?: FalFile[] }>(model, imageEditInput(model, params.prompt, params.imageUrls), { pollInterval: 400 });
+  const model = params.engine === "sketch" ? config.models.preview : config.models.concept;
+  const out = await run<{ images?: FalFile[] }>(model, imageEditInput(model, params.prompt, params.imageUrls, params.quality), { pollInterval: 400 });
   const url = out.images?.[0]?.url;
   if (!url) throw new Error("The image model returned no image");
   return url;

@@ -58,8 +58,35 @@ The house style (`HOUSE_STYLE` in `src/lib/avatar/options.ts`) is the five-heads
 
 Net effect on the six test faces: likeness **0.14 before, 0.77 now**, at half the price per final image.
 
+## Second pass: a fully stylized look (the current house style)
+
+The five-heads figure scored well but looked wrong to people: a near-photographic face on a toy body. The likeness score rewards realism, so optimizing for it had pushed the face toward a photo. The second pass asked for the opposite: one style for the whole character, face included, with the person translated into it the way a character designer would.
+
+Six styles, four test faces, GPT Image 2.6 at high quality. "Matched" is how many of the four renders were closer to their own selfie than to the other test selfies.
+
+| Style | Likeness score | Matched | Notes |
+| --- | --- | --- | --- |
+| Five-heads figure (previous) | 0.77 | 6 of 6 | Photo-like face on a stylized body |
+| Painted game hero | 0.40 | 4 of 4 | Closest to realistic, small head |
+| **Animated film character** | 0.23 | 4 of 4 | **House style.** Clearly a character, each person still themselves |
+| Clay puppet | 0.20 | 4 of 4 | Most distinctive; very simple eyes and mouth |
+| Cel-shaded toon | 0.18 | 2 of 4 | Reads as a flat drawing |
+| Soft rounded avatar | 0.12 | 3 of 4 | Faces drift toward one generic face |
+| Vinyl toy | 0.05 | 1 of 4 | Most toy-like, least like the person |
+
+The animated film style (`HOUSE_STYLE`, `STYLE_ID` "film-1") was picked by eye from the sheet. One real build confirmed it converts to 3D, rigs, and that the browser finds the face for lip sync (mouth shapes checked by eye).
+
+**Sketches changed with it.** Drawing straight from the selfie, the fast model (FLUX.3 klein) loses the person in this style: adults become generic cartoon children, beards disappear, and features named in the prompt (glasses, freckles) get added to people who don't have them. Wording changes and a style reference image did not fix it (the reference's identity leaks in). What works is not asking it to draw the person at all:
+
+1. The first sketch is drawn from the selfie by the main model at low quality (about 15 s, $0.02).
+2. Every later sketch is the fast model *restyling that picture* with the new look (`buildSketchEditPrompt`): outfit, build, hair and facial hair all change correctly and the face stays, in 4 to 7 s for under a cent.
+3. Once a final exists, sketches restyle the final instead.
+
+Only pictures the main model drew of the current selfie in the current style are used this way (`sketchBase` in `src/lib/server/concepts.ts`).
+
 ## What was not tested
 
 - Real selfies of real people in poor light or at odd angles.
-- Likeness after the 3D step (one build was checked by eye, not scored).
+- Likeness after the 3D step (one build per style was checked by eye, not scored).
+- The animated film style on more than four faces, and its sketches on real selfies.
 - Passing a tight face crop as a second reference image, which may help further.
