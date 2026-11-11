@@ -57,24 +57,20 @@ function randomOutfit(): Partial<Appearance> {
 const REDRAW_AFTER_MS = 450;
 /** Typing takes longer to finish than tapping. */
 const REDRAW_AFTER_TYPING_MS = 900;
+/** Most looks on the mannequin have been drawn for someone before and only need fetching. */
+const MANNEQUIN_AFTER_MS = 200;
 /** What a sketch usually takes, for the progress bar. */
 const SKETCH_SECONDS = 3.5;
-const FIRST_DRAWING_SECONDS = 35;
+/** What drawing the person takes once their portrait is ready. */
+const CHARACTER_SECONDS = 20;
 
-/** Whole seconds since `active` became true (0 while it is false). */
-function useSeconds(active: boolean) {
-  const [seconds, setSeconds] = useState(0);
-  useEffect(() => {
-    if (!active) return;
-    const started = Date.now();
-    const t = setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 500);
-    return () => {
-      clearInterval(t);
-      setSeconds(0);
-    };
-  }, [active]);
-  return seconds;
-}
+/** Resolves once the browser has the picture, so it can be swapped in without a blank moment. */
+const loaded = (src: string) =>
+  new Promise<string>((resolve) => {
+    const img = new Image();
+    img.onload = img.onerror = () => resolve(src);
+    img.src = src;
+  });
 
 /** A bar that fills over roughly the time the work takes, so a wait has a visible end. */
 function Progress({ seconds, className }: { seconds: number; className?: string }) {
@@ -105,19 +101,28 @@ export function LookStep({ avatar, token, onChange, goTo, autoBuild }: StepProps
 
   const selectedConcept = avatar.concepts.find((c) => c.id === selected) ?? null;
   const builtFrom = avatar.model?.conceptId;
-  const hasPicture = avatar.concepts.length > 0;
+  /**
+   * Whether quick sketches show the person themselves. They can once a
+   * character of them has been drawn. Until then looks are tried on a
+   * mannequin, which needs no drawing of them and is shared by everyone, so
+   * there is nothing to wait for before the first choice.
+   */
+  const onYou = avatar.sketchable;
   // Coming back from checkout, the build starts by itself (see the effect below).
   const plansUrl = `/pricing?next=${encodeURIComponent(selected ? `${here}&build=${selected}` : here)}`;
 
-  // Quick sketches follow the look as it changes.
-  //   drawn      the look the newest picture shows, so nothing is redrawn without a change
+  // The picture follows the look as it changes.
+  //   drawn      the look the picture on screen shows, so nothing is redrawn without a change
   //   requested  the look being drawn right now
-  //   seen       every look drawn this visit and its picture: going back to one is instant
+  //   seen       every look drawn of the person this visit and its picture: going back to one is instant
+  //   dressed    the same for looks on the mannequin
   //   inline     sketches as they arrived inside the response, shown without a second request
   const lookKey = JSON.stringify(look);
-  const drawn = useRef<string | null>(hasPicture ? JSON.stringify(avatar.appearance) : null);
+  const drawn = useRef<string | null>(selected ? JSON.stringify(avatar.appearance) : null);
   const requested = useRef<string | null>(null);
-  const seen = useRef(new Map<string, string>(hasPicture ? [[JSON.stringify(avatar.appearance), avatar.concepts[0].id]] : []));
+  const seen = useRef(new Map<string, string>(selected ? [[JSON.stringify(avatar.appearance), selected]] : []));
+  const dressed = useRef(new Map<string, string>());
+  const [mannequin, setMannequin] = useState<string | null>(null);
   const [inline, setInline] = useState<Record<string, string>>({});
   const draft = useRef<AbortController | null>(null);
   const typed = useRef(false);
@@ -128,24 +133,21 @@ export function LookStep({ avatar, token, onChange, goTo, autoBuild }: StepProps
     typed.current = typing;
     setLook(next);
     const key = JSON.stringify(next);
-    const known = seen.current.get(key);
-    if (hasPicture && known && avatar.concepts.some((c) => c.id === known)) {
-      draft.current?.abort();
-      draft.current = null;
-      requested.current = null;
-      drawn.current = key;
-      setDrafting(false);
-      setSelected(known);
-    }
+    const concept = onYou ? seen.current.get(key) : undefined;
+    const picture = onYou ? undefined : dressed.current.get(key);
+    if (!picture && !(concept && avatar.concepts.some((c) => c.id === concept))) return;
+    draft.current?.abort();
+    draft.current = null;
+    requested.current = null;
+    drawn.current = key;
+    setDrafting(false);
+    setSelected(concept ?? null);
+    if (picture) setMannequin(picture);
   }
 
   useEffect(() => {
     if (finalizing || refining) return;
     if (lookKey === drawn.current || lookKey === requested.current) return;
-    // The first drawing takes half a minute and every sketch is made from it, so it is left to
-    // finish. What is chosen meanwhile is drawn right after it, as a quick sketch.
-    const first = !hasPicture;
-    if (first && requested.current !== null) return;
     const timer = setTimeout(
       async () => {
         draft.current?.abort();
@@ -155,14 +157,24 @@ export function LookStep({ avatar, token, onChange, goTo, autoBuild }: StepProps
         setDrafting(true);
         setError(null);
         try {
-          const { avatar: next, created, inline: picture } = await api.drawCharacter(avatar.id, token, look, "preview", first ? undefined : ctrl.signal);
-          if (ctrl.signal.aborted) return;
-          const id = created[0];
-          drawn.current = lookKey;
-          if (id) seen.current.set(lookKey, id);
-          if (id && picture) setInline((m) => ({ ...m, [id]: picture }));
-          onChange(next);
-          setSelected(id ?? null);
+          if (onYou) {
+            const { avatar: next, created, inline: picture } = await api.drawCharacter(avatar.id, token, look, "preview", ctrl.signal);
+            if (ctrl.signal.aborted) return;
+            const id = created[0];
+            drawn.current = lookKey;
+            if (id) seen.current.set(lookKey, id);
+            if (id && picture) setInline((m) => ({ ...m, [id]: picture }));
+            onChange(next);
+            setSelected(id ?? null);
+          } else {
+            const { url, inline: picture } = await api.mannequin(look, ctrl.signal);
+            const src = picture ?? (await loaded(url));
+            if (ctrl.signal.aborted) return;
+            drawn.current = lookKey;
+            dressed.current.set(lookKey, src);
+            setMannequin(src);
+            setSelected(null);
+          }
         } catch (e) {
           if (!ctrl.signal.aborted) {
             // Not retried by itself: the next change draws again.
@@ -177,12 +189,38 @@ export function LookStep({ avatar, token, onChange, goTo, autoBuild }: StepProps
           }
         }
       },
-      first ? 150 : typed.current ? REDRAW_AFTER_TYPING_MS : REDRAW_AFTER_MS,
+      // The mannequin appears at once on arrival; after that, a moment after the last change.
+      !onYou && drawn.current === null ? 0 : typed.current ? REDRAW_AFTER_TYPING_MS : onYou ? REDRAW_AFTER_MS : MANNEQUIN_AFTER_MS,
     );
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lookKey, finalizing, refining, drafting, hasPicture]);
+  }, [lookKey, finalizing, refining, drafting, onYou]);
   useEffect(() => () => draft.current?.abort(), []);
+
+  // While looks are tried on the mannequin, the outfit presets are fetched ahead, so tapping one shows it at once.
+  useEffect(() => {
+    if (onYou) return;
+    let stopped = false;
+    const start = setTimeout(async () => {
+      for (const preset of OUTFIT_PRESETS) {
+        const outfit = { ...avatar.appearance, ...preset.outfit };
+        const key = JSON.stringify(outfit);
+        if (stopped) return;
+        if (dressed.current.has(key)) continue;
+        try {
+          const { url, inline: picture } = await api.mannequin(outfit);
+          dressed.current.set(key, picture ?? (await loaded(url)));
+        } catch {
+          return; // previews are a nicety: stop quietly (for example at the rate limit)
+        }
+      }
+    }, 800);
+    return () => {
+      stopped = true;
+      clearTimeout(start);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onYou]);
 
   async function finalize() {
     draft.current?.abort();
@@ -262,8 +300,7 @@ export function LookStep({ avatar, token, onChange, goTo, autoBuild }: StepProps
   const isFinal = selectedConcept?.kind === "final";
   const recent = avatar.concepts.slice(0, 8);
   const modelBusy = !!avatar.model && avatar.model.status !== "ready" && avatar.model.status !== "failed";
-  const firstDrawing = !hasPicture;
-  const waited = useSeconds(firstDrawing && drafting);
+  const onMannequin = !selectedConcept;
   const pictureOf = (c: { id: string; imageUrl: string }) => inline[c.id] ?? ownerUrl(c.imageUrl, token);
 
   const tabs = (
@@ -335,10 +372,12 @@ export function LookStep({ avatar, token, onChange, goTo, autoBuild }: StepProps
         </>
       ) : (
         <>
-          <Button size="lg" className="w-full" disabled={!selectedConcept || drafting} loading={finalizing} onClick={finalize}>
-            Create my character
+          <Button size="lg" className="w-full" disabled={!avatar.selfieUrl} loading={finalizing} onClick={finalize}>
+            {onMannequin ? "Create my character in this look" : "Create my character"}
           </Button>
-          <p className="hidden text-center text-xs text-ink-500 lg:block">Takes about 30 seconds. You can still tweak it afterwards.</p>
+          <p className="hidden text-center text-xs text-ink-500 lg:block">
+            {onMannequin ? "We draw you wearing it. About 20 seconds, and you can still change things afterwards." : "Takes about 20 seconds. You can still tweak it afterwards."}
+          </p>
         </>
       )}
     </>
@@ -376,13 +415,15 @@ export function LookStep({ avatar, token, onChange, goTo, autoBuild }: StepProps
               <img src={ownerUrl(avatar.selfieUrl, token)} alt="" className="size-11 rounded-full object-cover" />
             )}
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold">{isFinal ? "Your character" : "Quick sketch"}</p>
+              <p className="text-sm font-semibold">{isFinal ? "Your character" : onMannequin ? "Try on a look" : "Quick sketch"}</p>
               <p className="text-xs text-ink-500">
                 {finalizing
-                  ? "Drawing your final character. About 30 seconds."
+                  ? "Drawing you in this look. About 20 seconds."
                   : isFinal
                     ? "Happy with it? Tweak it with words, or bring it to life."
-                    : "Updates as you change things. Your final character is drawn in more detail."}
+                    : onMannequin
+                      ? "Pick an outfit on the mannequin. When you like it, we draw you wearing it."
+                      : "Updates as you change things. Your final character is drawn in more detail."}
               </p>
             </div>
           </div>
@@ -395,48 +436,44 @@ export function LookStep({ avatar, token, onChange, goTo, autoBuild }: StepProps
               )}
             </div>
             <div className="relative mx-auto aspect-[2/3] h-[min(30dvh,260px)] overflow-hidden rounded-2xl bg-white lg:h-auto lg:w-full lg:max-w-[320px]">
-              {selectedConcept ? (
+              {selectedConcept || mannequin ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={pictureOf(selectedConcept)}
-                  alt={isFinal ? "Your character" : "Quick sketch of your character"}
-                  className={cx("size-full object-contain transition-opacity duration-200", finalizing && "opacity-50")}
+                  src={selectedConcept ? pictureOf(selectedConcept) : mannequin!}
+                  alt={isFinal ? "Your character" : selectedConcept ? "Quick sketch of your character" : "The look on a mannequin"}
+                  className={cx("size-full object-contain transition-opacity duration-200", finalizing && "opacity-40")}
                 />
               ) : (
-                <div className="grid size-full place-items-center bg-gradient-to-b from-ink-100 to-ink-50 px-4 text-center">
-                  <div>
-                    <Spinner className="size-5 text-accent-500" />
-                    <p className="mt-3 text-sm font-medium text-ink-800">{waited < 16 ? "Studying your photo" : "Drawing you"}</p>
-                    <p className="mt-1 text-xs text-ink-500">About half a minute, just this once. Pick your look meanwhile.</p>
-                  </div>
-                </div>
+                <div className="size-full animate-pulse bg-gradient-to-b from-ink-100 to-ink-50" />
               )}
               {finalizing && (
-                <div className="absolute inset-0 grid place-items-center">
-                  <span className="flex items-center gap-2 rounded-full bg-ink-900/80 px-3.5 py-2 text-xs font-medium text-white">
-                    <Spinner className="size-3.5" /> Drawing your final character
+                <div className="absolute inset-0 grid place-items-center px-3">
+                  <span className="flex items-center gap-2 rounded-full bg-ink-900/80 px-3.5 py-2 text-center text-xs font-medium text-white">
+                    <Spinner className="size-3.5 shrink-0" /> {onMannequin ? "Drawing you in this look" : "Drawing your final character"}
                   </span>
                 </div>
               )}
-              {selectedConcept && !finalizing && (
+              {(selectedConcept || mannequin) && !finalizing && (
                 <span
                   className={cx(
                     "absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-medium",
                     isFinal ? "bg-accent-500 text-white" : "bg-ink-900/70 text-white",
                   )}
                 >
-                  {isFinal ? "Final" : "Sketch"}
+                  {isFinal ? "Final" : onMannequin ? "Mannequin" : "Sketch"}
                 </span>
               )}
-              {drafting && selectedConcept && (
+              {drafting && onYou && (
                 <span className="absolute right-2 top-2 flex items-center gap-1.5 rounded-full bg-ink-900/75 px-2 py-0.5 text-[10px] font-medium text-white">
                   <Spinner className="size-2.5" /> Updating
                 </span>
               )}
-              {drafting && <Progress key={lookKey} seconds={firstDrawing ? FIRST_DRAWING_SECONDS : SKETCH_SECONDS} className="absolute inset-x-0 bottom-0" />}
+              {(drafting || finalizing) && (
+                <Progress key={finalizing ? "final" : lookKey} seconds={finalizing ? CHARACTER_SECONDS : SKETCH_SECONDS} className="absolute inset-x-0 bottom-0" />
+              )}
             </div>
             <div className="flex max-h-[min(30dvh,260px)] flex-col gap-1.5 overflow-y-auto lg:mt-3 lg:max-h-none lg:flex-row lg:overflow-x-auto lg:pb-1">
-              {recent.length > 1 &&
+              {recent.length > (onMannequin ? 0 : 1) &&
                 recent.map((c) => (
                   <ConceptTile
                     key={c.id}

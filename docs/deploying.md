@@ -54,6 +54,8 @@ fal's callback carries a per-build secret and is only a nudge: the app then asks
 
 **Uploads.** Vercel accepts request bodies up to 4.5 MB. The app's own limit is 4 MB everywhere, and the browser makes files fit before sending: photos over 1.5 MB are scaled down (the server keeps a 1024 px selfie anyway), and a voice sample is cut at 75 seconds (cloning needs 15 to 30).
 
+**Looks on the mannequin** are drawn once and kept for everyone, in a `shared/` folder of the store and a table of their own. A new deployment starts with none, so its first visitor waits about three seconds per new look; after that most are there already.
+
 **Files.** Everything is served through `/api/files/...`. Private files (selfies, portraits, voice samples, character images) are checked against the owner on every request. Public ones (3D models, thumbnails, backdrops) have unchanging names and are cached by Vercel's CDN for a year, so after the first request for a model the function and the Blob store aren't touched.
 
 **Rate limits** are token buckets in a Postgres table, one statement per check, so every instance counts against the same bucket. Keys are hashed; no IP addresses are stored.

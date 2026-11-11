@@ -129,6 +129,9 @@ export const api = {
       body: JSON.stringify({ appearance, kind }),
       signal,
     }),
+  /** The shared mannequin wearing a look. `inline` is the picture itself when it was drawn just now. */
+  mannequin: (appearance: Appearance, signal?: AbortSignal) =>
+    request<{ url: string; inline?: string }>("/api/mannequin", { method: "POST", body: JSON.stringify({ appearance }), signal }),
   refineConcept: (id: string, token: string, conceptId: string, instruction: string) =>
     request<{ avatar: Avatar; created: string[] }>(`/api/avatars/${id}/concepts/refine`, {
       method: "POST",

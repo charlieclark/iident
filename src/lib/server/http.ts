@@ -4,6 +4,7 @@ import type { AvatarRecord, PublicAvatar } from "@/lib/avatar/types";
 import { HttpError } from "./config";
 import { createHash } from "node:crypto";
 import { mayEdit } from "./auth";
+import { sketchBase } from "./concepts";
 import { loadAvatar } from "./db";
 import { one, query } from "./pg";
 import { fileUrl } from "./storage";
@@ -129,6 +130,8 @@ export async function ownerView(r: AvatarRecord) {
       parentId: c.parentId ?? null,
     })),
     selectedConceptId: r.selectedConceptId ?? null,
+    /** Whether there is a picture of this person that quick sketches can restyle. Until then looks are tried on a mannequin. */
+    sketchable: !!sketchBase(r),
     model: r.model
       ? {
           status: r.model.status,

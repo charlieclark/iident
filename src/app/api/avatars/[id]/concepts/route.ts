@@ -4,7 +4,6 @@ import { z } from "zod";
 import { appearanceSchema, buildConceptPrompt, buildSketchEditPrompt, STYLE_ID } from "@/lib/avatar/options";
 import type { Concept } from "@/lib/avatar/types";
 import { sketchBase, withConcept } from "@/lib/server/concepts";
-import { config } from "@/lib/server/config";
 import { updateAvatar } from "@/lib/server/db";
 import { generateCharacterImage } from "@/lib/server/fal";
 import { HttpError, handle, ownerView, rateLimit, requireOwner } from "@/lib/server/http";
@@ -33,9 +32,9 @@ const bodySchema = z.object({
 });
 
 /**
- * Draws the creator as a full-body character in their chosen look: a quick
- * sketch ("preview") while they try things, or the full-quality render
- * ("final") the 3D model is built from.
+ * Draws the creator as a full-body character in their chosen look: the
+ * full-quality render ("final") the 3D model is built from, or, once there
+ * is one, a quick sketch ("preview") of a changed look.
  */
 export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/[id]/concepts">) => {
   const { id } = await ctx.params;
@@ -49,9 +48,10 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
   if (!record.selfie) throw new HttpError(400, "Upload a selfie first.");
 
   // A sketch restyles the picture the main model already drew of this person,
-  // which keeps the face. Until there is one, the main model draws the first
-  // sketch itself, at a lower quality.
+  // which keeps the face. Until there is one, looks are tried on a mannequin
+  // instead (/api/mannequin), so nothing has to be drawn before the first choice.
   const base = kind === "preview" ? sketchBase(record) : null;
+  if (kind === "preview" && !base) throw new HttpError(409, "Create your character first.");
   // Drawn from the selfie's clean portrait and the selfie together; from the selfie alone if the portrait could not be made.
   const portrait = base ? null : await ensurePortrait(id);
   const prompt = base ? buildSketchEditPrompt(appearance) : buildConceptPrompt(appearance, { portrait: !!portrait });
@@ -61,7 +61,6 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
         engine: "main",
         imageUrls: portrait ? [portrait, record.selfie.url] : [record.selfie.url],
         prompt,
-        quality: kind === "preview" ? config.models.firstSketchQuality : undefined,
       });
   const cid = randomBytes(6).toString("base64url");
   const image = await download(url);

@@ -133,8 +133,6 @@ export const config = {
     portraitQuality: env("PORTRAIT_QUALITY", "medium")!,
     /** Quality settings, for image models that have them (GPT Image). */
     conceptQuality: env("CONCEPT_QUALITY", "high")!,
-    /** The first sketch is drawn from the selfie by the main model, at this quality where it applies. */
-    firstSketchQuality: env("FIRST_SKETCH_QUALITY", "low")!,
     /** Quick drafts while trying looks: under a cent and a few seconds each. */
     preview: env("FAL_PREVIEW_MODEL", "blackforestlabs/flux-3/klein/edit-image")!,
     /** Backdrop scenes from a description (under a cent each). */

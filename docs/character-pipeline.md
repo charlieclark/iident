@@ -111,6 +111,17 @@ The clean portrait is the selfie redrawn by GPT Image 2.6 as the same person str
 
 A written description of the person (from a vision model) is the next thing to try if likeness needs to go further.
 
+## Trying looks on a mannequin
+
+The first drawing of a person takes two model calls in a row (the portrait, then the character): 31 to 39 seconds before anything could be tried. Making it faster had run out of road, so it was taken out of the way instead: until there is a character, looks are shown on a neutral mannequin, and the person is drawn once, when they have chosen.
+
+- The mannequin (`src/assets/mannequin.jpg`) was made from a character in the house style with the person replaced by a featureless gray figure, so it has the same proportions and pose as the characters. Mannequins drawn from a description alone came out anatomical and male.
+- FLUX.3 klein dresses it from the same outfit wording the character prompt uses, plus "no logos": without that, sportswear comes with brand marks.
+- The picture is filed under a key made from what the mannequin can show (outfit, accessories, a changed hairstyle, build, free-text details). Face, height and "hair as in the photo" are not part of it. One table, `mannequin_sketches`, and one shared folder hold the pictures for every account.
+- Measured in the browser: 1.4 s from uploading the photo to a dressed mannequin, 0.2 to 0.6 s for a look tried before, 3 to 4 s for a new one, then 20 s from "Create my character" to the character (33 s when pressed within seconds of uploading, because the portrait is still being made).
+
+What is given up: people don't see themselves until they press the button, and a body type shows only loosely on the mannequin. After the first character, sketches are of the person again (below).
+
 ## Sketches
 
 Drawing straight from the selfie, the fast model (FLUX.3 klein) loses the person in a cartoon style: adults become generic cartoon children, beards disappear, and features named in the prompt (glasses, freckles) get added to people who don't have them. Wording changes and a style reference image did not fix it (the reference's identity leaks in). What works is not asking it to draw the person at all:
