@@ -84,15 +84,6 @@ export async function generateCharacterImage(params: {
   return url;
 }
 
-/** The mannequin picture + a look -> the mannequin wearing it, from the fast model. */
-export async function generateMannequinSketch(mannequin: string, prompt: string): Promise<string> {
-  const model = config.models.preview;
-  const out = await run<{ images?: FalFile[] }>(model, { ...imageEditInput(model, prompt, [mannequin]), output_format: "jpeg" }, { pollInterval: 200 });
-  const url = out.images?.[0]?.url;
-  if (!url) throw new Error("The image model returned no image");
-  return url;
-}
-
 /** Description -> a square backdrop image (cropped to fit any screen). */
 export async function generateBackdrop(prompt: string): Promise<string> {
   const out = await run<{ images?: FalFile[] }>(

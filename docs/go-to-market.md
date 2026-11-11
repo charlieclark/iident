@@ -62,7 +62,7 @@ A cost-based way to set the Liinks offer:
 | Replies a month | none | 300 | 2,000 |
 | Cards, embed on your own site | No | Cards | Cards and embed |
 
-The free tier costs about 10 to 15 cents per person (a portrait, one or two characters, a few sketches; looks tried on the mannequin are shared and mostly cost nothing) and gives them something to share (their character). The paywall sits exactly where the cost is: bringing it to life in 3D.
+The free tier costs about 10 to 15 cents per person (a portrait, one or two characters, a few sketches; looks tried on the mannequin cost nothing) and gives them something to share (their character). The paywall sits exactly where the cost is: bringing it to life in 3D.
 
 These prices are a starting point from costs, not from testing what people will pay. This table is what is built (`src/lib/billing/plans.ts`), with 2 builds in 3D a month on Creator and 5 on Pro; embedding on your own site is not built yet and is not advertised.
 

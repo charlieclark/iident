@@ -49,7 +49,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
 
   // A sketch restyles the picture the main model already drew of this person,
   // which keeps the face. Until there is one, looks are tried on a mannequin
-  // instead (/api/mannequin), so nothing has to be drawn before the first choice.
+  // dressed in the browser (src/lib/avatar/doll.ts), so nothing is drawn before the first choice.
   const base = kind === "preview" ? sketchBase(record) : null;
   if (kind === "preview" && !base) throw new HttpError(409, "Create your character first.");
   // Drawn from the selfie's clean portrait and the selfie together; from the selfie alone if the portrait could not be made.

@@ -47,12 +47,4 @@ export const MIGRATIONS: string[][] = [
       at BIGINT NOT NULL
     )`,
   ],
-  [
-    // Outfits drawn on the mannequin. It is the same mannequin for everyone, so each look is drawn once and shared.
-    `CREATE TABLE mannequin_sketches (
-      key TEXT PRIMARY KEY,
-      file TEXT NOT NULL,
-      created_at BIGINT NOT NULL
-    )`,
-  ],
 ];

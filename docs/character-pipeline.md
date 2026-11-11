@@ -113,14 +113,23 @@ A written description of the person (from a vision model) is the next thing to t
 
 ## Trying looks on a mannequin
 
-The first drawing of a person takes two model calls in a row (the portrait, then the character): 31 to 39 seconds before anything could be tried. Making it faster had run out of road, so it was taken out of the way instead: until there is a character, looks are shown on a neutral mannequin, and the person is drawn once, when they have chosen.
+The first drawing of a person takes two model calls in a row (the portrait, then the character): 31 to 39 seconds before anything could be tried. Making it faster had run out of road, so it was taken out of the way instead: until there is a character, looks are shown on a mannequin, and the person is drawn once, when they have chosen.
 
-- The mannequin (`src/assets/mannequin.jpg`) was made from a character in the house style with the person replaced by a featureless gray figure, so it has the same proportions and pose as the characters. Mannequins drawn from a description alone came out anatomical and male.
-- FLUX.3 klein dresses it from the same outfit wording the character prompt uses, plus "no logos": without that, sportswear comes with brand marks.
-- The picture is filed under a key made from what the mannequin can show (outfit, accessories, a hairstyle or beard that was picked, build, free-text details). Height, and hair or facial hair left "as in the photo", are not part of it, since there is nothing of the person to show. One table, `mannequin_sketches`, and one shared folder hold the pictures for every account.
-- Measured in the browser: 1.4 s from uploading the photo to a dressed mannequin, 0.2 to 0.6 s for a look tried before, 3 to 4 s for a new one, then 20 s from "Create my character" to the character (33 s when pressed within seconds of uploading, because the portrait is still being made).
+Two ways of dressing the mannequin were built:
 
-What is given up: people don't see themselves until they press the button, and a body type shows only loosely on the mannequin. After the first character, sketches are of the person again (below).
+1. **The fast model dresses it on request** (FLUX.3 klein editing one mannequin picture, with each result shared by all accounts). It worked, but a look nobody had tried still took 3 to 4 seconds, and with 27 colors per garment most color changes were new.
+2. **Ready-made pieces, layered and tinted in the browser.** Kept. Every change shows in 30 to 90 ms, nothing is drawn, and there is no server part at all.
+
+How the pieces are made (`scripts/doll/build.mjs`):
+
+- The mannequin was made from a character in the house style with the person replaced by a featureless figure, so it has the characters' proportions and pose. For cutting, it is kept as dark gray on bright green (`scripts/doll/base.png`).
+- For each option, Nano Banana 2.1 puts that one garment on it in pure white and changes nothing else. It keeps the mannequin in place well: across the 64 pieces the rest of the picture moved by 0.6 to 3.2 percent of the brightness range.
+- The garment is whatever is not green, is bright, and is brighter than the mannequin was at that spot (its own highlights are bright too). Cracks and holes left by dark seams are sealed; openings that belong (the lenses of glasses, a necklace's loop) are kept. The garment's lightness becomes the shading.
+- In the browser, a piece is its shading multiplied by the chosen color. Order is feet up and skin out. A jacket carries a mask of what it hides of the top under it (sleeves that would stick out), and a hat one for hair.
+
+What it cannot show: the person (nothing of them is drawn until they press the button), free-text details, and a build beyond making the figure a little wider or narrower. Pieces don't react to each other: a hood doesn't sit over a jacket's collar, and an afro under a cap is only roughly right. After the first character, sketches are of the person (below).
+
+Measured in the browser: 2.4 s from uploading the photo to a dressed mannequin, 30 to 90 ms per change, then 20 to 24 s from "Create my character" to the character (33 s when pressed within seconds of uploading, because the portrait is still being made).
 
 ## Sketches
 

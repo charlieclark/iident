@@ -430,42 +430,6 @@ export function buildSketchEditPrompt(a: Appearance): string {
   ].join(" ");
 }
 
-/**
- * What a look comes down to on the mannequin outfits are tried on before the
- * person has a character of their own. The mannequin has no face, no hair of
- * its own and no height, so "as in the photo" has nothing to show and two
- * looks that differ only in those are the same picture. A hairstyle or a
- * beard that was picked is shown. The parts listed here are both what is
- * drawn and what the shared picture is filed under.
- */
-export function mannequinLook(a: Appearance): string[] {
-  const lines: string[] = [];
-  if (!a.hair.keep) {
-    lines.push(`Hair: give it ${fixArticles(find(HAIR_STYLES, a.hair.style).prompt.replace("{c}", find(HAIR_COLORS, a.hair.color).name))}.`);
-  }
-  // Clean-shaven is what the blank head already is.
-  if (a.facialHair !== "keep" && a.facialHair !== "none") lines.push(`Facial hair: ${find(FACIAL_HAIR, a.facialHair).prompt}.`);
-  if (a.build !== "average") lines.push(`Body type: ${find(BUILDS, a.build).prompt}.`);
-  lines.push(`Outfit: ${describeOutfit(a)}.`);
-  if (a.accessories.length) {
-    lines.push(`Accessories: ${joinList([...a.accessories].sort().map((id) => find(ACCESSORIES, id).prompt))}.`);
-  }
-  const extras = sanitizeExtras(a.extras);
-  if (extras) lines.push(`Extra details: ${extras}.`);
-  return lines;
-}
-
-/** Prompt for dressing the mannequin: the fast model edits the one mannequin picture every sketch starts from. */
-export function buildMannequinPrompt(a: Appearance): string {
-  return [
-    "Dress this mannequin. It stays the same featureless light gray mannequin: the same smooth blank head with no face, the same body, size, pose and rendering. Only what is listed below is added.",
-    ...mannequinLook(a),
-    "Plain clothes with no logos, brand marks or lettering.",
-    "Pose: neutral A-pose, standing straight, facing the camera, arms straight and angled about 30 degrees away from the body, empty hands, feet slightly apart. " +
-      "Full figure visible from head to shoes, centered, flat even studio lighting, plain pure white background, no props, no text, no floor shadow.",
-  ].join(" ");
-}
-
 const POSE_AND_FRAMING =
   "Pose: neutral A-pose, standing straight, facing the camera, arms straight and angled about 30 degrees away from the body, palms facing the thighs, empty hands, feet slightly apart. " +
   "Expression: relaxed and friendly with an unfurrowed brow, lips gently closed in the faintest smile, eyes open looking at the camera. " +
