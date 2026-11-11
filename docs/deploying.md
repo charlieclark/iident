@@ -29,7 +29,8 @@ iident runs on Vercel with a Postgres database and a Vercel Blob store. Nothing 
    | `ELEVENLABS_API_KEY` | Streaming speech (recommended) |
    | `FISH_API_KEY` | Cloned voices (recommended) |
    | `RESEND_API_KEY`, `EMAIL_FROM` | Sign-in emails. Without them nobody can sign in on a deployed site |
-   | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Plans and payments. Without the secret key nothing is paywalled |
+   | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Plans and payments. Without the secret key nobody can pay, so the deployed site builds no 3D avatars (except for `COMP_EMAILS` accounts) |
+   | `COMP_EMAILS` | Your own address, to test a deployment end to end before payments are set up |
    | `NEXT_PUBLIC_APP_URL` | Only if the site's address isn't the project's production domain (see below) |
 
    The rest of `.env.example` is optional.

@@ -38,6 +38,15 @@
   --shadow-lift: 0 2px 6px rgb(22 21 26 / 0.06), 0 22px 48px -18px rgb(22 21 26 / 0.28);
 
   --animate-float: float 6s ease-in-out infinite;
+  /* A progress bar that fills towards, but never quite reaches, the end while work is under way. */
+  @keyframes preview-fill {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(0.94);
+    }
+  }
   @keyframes float {
     0%,
     100% {
