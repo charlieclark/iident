@@ -127,12 +127,22 @@ export type ModelJob = {
   /** Merged GLB (mesh + skeleton + named animation clips). */
   file?: string;
   clips?: string[];
-  /** fal request ids, kept so a restarted server could resume polling. */
+  /** fal queue request ids of the steps submitted so far (`mesh`, `rig`): how any server instance picks the build up. */
   requests?: Record<string, string>;
-  /** Intermediate fal URLs, useful for debugging and retries. */
+  /** Intermediate fal URLs (`mesh`, `rigged`), used by later steps and by retries. */
   sources?: Record<string, string>;
+  /** The animation clips rigging produced, waiting to be merged into the model. */
+  clipSources?: { name: string; url: string }[];
   /** This attempt reused the mesh from a failed attempt (only done once). */
   meshReused?: boolean;
+  /** When the current stage began, to give up on a step that never finishes. */
+  stageAt?: number;
+  /** Held by the server instance that is moving the build on, so no step runs twice. */
+  lease?: { id: string; until: number };
+  /** How many times the final merge was started. */
+  finishAttempts?: number;
+  /** Secret in the address fal calls when a step completes. Never sent to a browser. */
+  hookKey?: string;
 };
 
 export type SpeechProvider = "elevenlabs" | "minimax" | "fish";
@@ -171,6 +181,8 @@ export type AvatarRecord = {
      * in the character.
      */
     portrait?: { file: string; url: string };
+    /** When a server instance started making the portrait, so that others wait for it instead of making their own. */
+    portraitClaimedAt?: number;
   };
   appearance: Appearance;
   concepts: Concept[];

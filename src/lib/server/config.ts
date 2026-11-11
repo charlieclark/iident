@@ -4,12 +4,26 @@ import path from "node:path";
 const env = (name: string, fallback?: string) => process.env[name]?.trim() || fallback;
 
 /**
+ * The site's public address: NEXT_PUBLIC_APP_URL when set, otherwise what
+ * Vercel says about the deployment (the production domain in production,
+ * the deployment's own address in previews), otherwise local development.
+ */
+function appUrl(): string {
+  const explicit = env("NEXT_PUBLIC_APP_URL");
+  if (explicit) return explicit.replace(/\/+$/, "");
+  const production = env("VERCEL_PROJECT_PRODUCTION_URL");
+  if (production && env("VERCEL_ENV") === "production") return `https://${production}`;
+  const deployment = env("VERCEL_BRANCH_URL") ?? env("VERCEL_URL");
+  return deployment ? `https://${deployment}` : "http://localhost:3000";
+}
+
+/**
  * Central place for every tunable. Model ids are configurable so a newer
  * fal endpoint can be swapped in without code changes.
  */
 export const config = {
   dataDir: path.resolve(/*turbopackIgnore: true*/ process.cwd(), env("DATA_DIR", "data")!),
-  appUrl: env("NEXT_PUBLIC_APP_URL", "http://localhost:3000")!,
+  appUrl: appUrl(),
 
   falKey: env("FAL_KEY"),
   anthropicKey: env("ANTHROPIC_API_KEY"),

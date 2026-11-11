@@ -1,6 +1,6 @@
 import "server-only";
 import type { AvatarRecord, Usage } from "@/lib/avatar/types";
-import { PLANS } from "@/lib/billing/plans";
+import { PLANS, type PlanId } from "@/lib/billing/plans";
 import { userById } from "./auth";
 import { billingEnabled, planOf } from "./billing";
 import { config } from "./config";
@@ -24,6 +24,8 @@ export function usageOf(record: AvatarRecord, now = new Date()): Usage {
   return { month, replies: u?.month === month ? u.replies : 0, total: u?.total ?? 0 };
 }
 
+export type Allowance = { limit: number; used: number; paused: boolean };
+
 /**
  * The replies an avatar may give this month: the limit (0 = none), how many
  * count against it so far, and whether the avatar is paused because its
@@ -33,30 +35,36 @@ export function usageOf(record: AvatarRecord, now = new Date()): Usage {
  * allowance, which all of the account's avatars share. Otherwise the
  * configured default applies to each avatar on its own.
  */
-export function replyAllowance(record: AvatarRecord, now = new Date()): { limit: number; used: number; paused: boolean } {
-  const ownerId = billingEnabled() ? avatarOwner(record.id) : null;
+export async function replyAllowance(record: AvatarRecord, now = new Date()): Promise<Allowance> {
+  const ownerId = billingEnabled() ? await avatarOwner(record.id) : null;
   if (!ownerId) return { limit: config.limits.monthlyReplies, used: usageOf(record, now).replies, paused: false };
-  const { replies } = PLANS[planOf(userById(ownerId))];
-  const used = avatarsOwnedBy(ownerId).reduce((n, r) => n + usageOf(r, now).replies, 0);
-  return { limit: replies, used, paused: replies === 0 };
+  const [user, owned] = await Promise.all([userById(ownerId), avatarsOwnedBy(ownerId)]);
+  return accountAllowance(await planOf(user), owned, now);
 }
 
-/** Whether the avatar should stop answering with a model call and speech. */
-export function overLimit(record: AvatarRecord, now = new Date()): boolean {
-  const { limit, used, paused } = replyAllowance(record, now);
-  return paused || (limit > 0 && used >= limit);
+/** The allowance shared by an account's avatars, from records already loaded. */
+export function accountAllowance(plan: PlanId, owned: AvatarRecord[], now = new Date()): Allowance {
+  const { replies } = PLANS[plan];
+  return { limit: replies, used: owned.reduce((n, r) => n + usageOf(r, now).replies, 0), paused: replies === 0 };
 }
 
-export function countReply(id: string, now = new Date()) {
-  updateAvatar(id, (r) => {
+/** Whether an allowance is used up, so the avatar should stop answering with a model call and speech. */
+export const isOver = ({ limit, used, paused }: Allowance) => paused || (limit > 0 && used >= limit);
+
+export async function overLimit(record: AvatarRecord, now = new Date()): Promise<boolean> {
+  return isOver(await replyAllowance(record, now));
+}
+
+export async function countReply(id: string, now = new Date()) {
+  await updateAvatar(id, (r) => {
     const u = usageOf(r, now);
     r.usage = { month: u.month, replies: u.replies + 1, total: u.total + 1 };
   });
 }
 
 /** What the avatar says, in text only, once the month's replies are used up. */
-export function limitMessage(record: AvatarRecord): string {
+export function limitMessage(record: AvatarRecord, allowance: Allowance): string {
   const name = record.persona.name.trim();
-  if (replyAllowance(record).paused) return `I'm taking a break right now.${name ? ` You can still reach ${name} directly.` : ""}`;
+  if (allowance.paused) return `I'm taking a break right now.${name ? ` You can still reach ${name} directly.` : ""}`;
   return `I've had so many conversations this month that I need to rest my voice until next month.${name ? ` You can still reach ${name} directly.` : ""}`;
 }

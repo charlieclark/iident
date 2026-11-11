@@ -5,10 +5,9 @@ import { buildBackdropPrompt, toneFor, type Backdrop } from "@/lib/avatar/backdr
 import { requireFal } from "@/lib/server/config";
 import { updateAvatar } from "@/lib/server/db";
 import { generateBackdrop } from "@/lib/server/fal";
-import { HttpError, handle, ownerView, rateLimit, requireOwner } from "@/lib/server/http";
+import { HttpError, MAX_UPLOAD_BYTES, handle, ownerView, rateLimit, requireOwner } from "@/lib/server/http";
 import { download, putFile } from "@/lib/server/storage";
 
-const MAX_BYTES = 12 * 1024 * 1024;
 const promptSchema = z.object({ prompt: z.string().trim().min(3).max(200) });
 
 /** Normalizes an image to a WebP of at most 1600 px and measures how bright it is. */
@@ -27,22 +26,22 @@ async function prepare(input: Buffer | Uint8Array) {
  */
 export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/[id]/backdrop">) => {
   const { id } = await ctx.params;
-  requireOwner(req, id);
+  await requireOwner(req, id);
   let source: Buffer | Uint8Array;
   let prompt: string | undefined;
 
   if (req.headers.get("content-type")?.includes("application/json")) {
-    rateLimit(req, "generate", 12);
+    await rateLimit(req, "generate", 12);
     requireFal();
     const parsed = promptSchema.safeParse(await req.json());
     if (!parsed.success) throw new HttpError(400, "Describe the scene in a few words.");
     prompt = parsed.data.prompt;
     source = await download(await generateBackdrop(buildBackdropPrompt(prompt)));
   } else {
-    rateLimit(req, "upload", 20);
+    await rateLimit(req, "upload", 20);
     const file = (await req.formData()).get("file");
     if (!(file instanceof File)) throw new HttpError(400, "Attach an image file.");
-    if (file.size > MAX_BYTES) throw new HttpError(413, "That image is too large (max 12 MB).");
+    if (file.size > MAX_UPLOAD_BYTES) throw new HttpError(413, "That image is too large (max 4 MB).");
     source = Buffer.from(await file.arrayBuffer());
   }
 
@@ -54,8 +53,8 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
   }
   const file = await putFile(id, `backdrop-${randomBytes(5).toString("hex")}.webp`, prepared.webp);
   const backdrop: Backdrop = { kind: "image", file, tone: prepared.tone, ...(prompt ? { prompt } : {}) };
-  const record = updateAvatar(id, (r) => {
+  const record = await updateAvatar(id, (r) => {
     r.backdrop = backdrop;
   });
-  return Response.json({ avatar: ownerView(record) });
+  return Response.json({ avatar: await ownerView(record) });
 });

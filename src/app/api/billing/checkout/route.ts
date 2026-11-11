@@ -8,8 +8,8 @@ const bodySchema = z.object({ plan: z.enum(["creator", "pro"]) });
 
 /** Starts Stripe Checkout for a plan and returns the URL to send the person to. */
 export const POST = handle(async (req: Request) => {
-  rateLimit(req, "checkout", 6);
-  const user = sessionUser(req);
+  await rateLimit(req, "checkout", 6);
+  const user = await sessionUser(req);
   if (!user) throw new HttpError(401, "Sign in to choose a plan.");
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) throw new HttpError(400, "Choose a plan.");

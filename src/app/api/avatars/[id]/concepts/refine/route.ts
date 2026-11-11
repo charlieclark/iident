@@ -9,6 +9,9 @@ import { HttpError, handle, ownerView, rateLimit, requireOwner } from "@/lib/ser
 import { ensurePortrait } from "@/lib/server/portrait";
 import { download, putFile } from "@/lib/server/storage";
 
+/** Drawing takes 15 to 45 seconds. */
+export const maxDuration = 300;
+
 const bodySchema = z.object({
   conceptId: z.string().min(1).max(32),
   instruction: z.string().min(2).max(240),
@@ -17,8 +20,8 @@ const bodySchema = z.object({
 /** Applies a free-text tweak ("make the jacket red") to an existing concept. */
 export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/[id]/concepts/refine">) => {
   const { id } = await ctx.params;
-  rateLimit(req, "generate", 12);
-  const record = requireOwner(req, id);
+  await rateLimit(req, "generate", 12);
+  const record = await requireOwner(req, id);
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) throw new HttpError(400, "Describe the change you'd like.");
   const base = record.concepts.find((c) => c.id === parsed.data.conceptId);
@@ -46,8 +49,8 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
     selfie: record.selfie.file,
     createdAt: Date.now(),
   };
-  const updated = updateAvatar(id, (r) => {
+  const updated = await updateAvatar(id, (r) => {
     r.concepts = withConcept(r.concepts, concept);
   });
-  return Response.json({ avatar: ownerView(updated), created: [cid] });
+  return Response.json({ avatar: await ownerView(updated), created: [cid] });
 });

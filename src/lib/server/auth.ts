@@ -1,7 +1,8 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { config } from "./config";
-import { avatarOwner, db, hashToken, verifyEditToken } from "./db";
+import { hashToken, loadAvatar, tokenMatches, type LoadedAvatar } from "./db";
+import { one, query } from "./pg";
 
 /**
  * Accounts without passwords: a person asks for a sign-in link by email,
@@ -19,42 +20,35 @@ const LINKS_PER_HOUR = 5;
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
 /** Creates a one-time sign-in token for an email, or null when too many were requested recently. */
-export function createLoginToken(email: string, now = Date.now()): string | null {
+export async function createLoginToken(email: string, now = Date.now()): Promise<string | null> {
   const address = normalizeEmail(email);
-  const conn = db();
-  conn.prepare("DELETE FROM login_tokens WHERE expires_at < ?").run(now);
-  const recent = conn.prepare("SELECT COUNT(*) AS n FROM login_tokens WHERE email = ? AND created_at > ?").get(address, now - 60 * 60 * 1000) as { n: number };
-  if (recent.n >= LINKS_PER_HOUR) return null;
+  await query("DELETE FROM login_tokens WHERE expires_at < $1", [now]);
+  const recent = await one<{ n: number }>("SELECT COUNT(*)::int AS n FROM login_tokens WHERE email = $1 AND created_at > $2", [address, now - 60 * 60 * 1000]);
+  if ((recent?.n ?? 0) >= LINKS_PER_HOUR) return null;
   const token = randomBytes(32).toString("base64url");
-  conn.prepare("INSERT INTO login_tokens (token_hash, email, created_at, expires_at) VALUES (?, ?, ?, ?)").run(hashToken(token), address, now, now + LINK_TTL);
+  await query("INSERT INTO login_tokens (token_hash, email, created_at, expires_at) VALUES ($1, $2, $3, $4)", [hashToken(token), address, now, now + LINK_TTL]);
   return token;
 }
 
 /** Uses up a sign-in token and returns its account, creating the account on first sign-in. */
-export function consumeLoginToken(token: string, now = Date.now()): User | null {
-  const conn = db();
-  const hash = hashToken(token);
-  const row = conn.prepare("SELECT email, expires_at FROM login_tokens WHERE token_hash = ?").get(hash) as { email: string; expires_at: number } | undefined;
-  if (!row) return null;
-  conn.prepare("DELETE FROM login_tokens WHERE token_hash = ?").run(hash);
-  if (row.expires_at < now) return null;
-  const existing = userByEmail(row.email);
-  if (existing) return existing;
-  const user: User = { id: `u_${randomBytes(9).toString("hex")}`, email: row.email, createdAt: now };
-  conn.prepare("INSERT INTO users (id, email, created_at) VALUES (?, ?, ?)").run(user.id, user.email, user.createdAt);
-  return user;
+export async function consumeLoginToken(token: string, now = Date.now()): Promise<User | null> {
+  // Deleting and reading in one statement makes the token single use even when two requests race.
+  const row = await one<{ email: string; expires_at: number }>("DELETE FROM login_tokens WHERE token_hash = $1 RETURNING email, expires_at", [hashToken(token)]);
+  if (!row || Number(row.expires_at) < now) return null;
+  await query("INSERT INTO users (id, email, created_at) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING", [`u_${randomBytes(9).toString("hex")}`, row.email, now]);
+  return userByEmail(row.email);
 }
 
 type UserRow = { id: string; email: string; created_at: number };
-const toUser = (row: UserRow | undefined): User | null => (row ? { id: row.id, email: row.email, createdAt: row.created_at } : null);
+const toUser = (row: UserRow | undefined): User | null => (row ? { id: row.id, email: row.email, createdAt: Number(row.created_at) } : null);
 
-export const userByEmail = (email: string) => toUser(db().prepare("SELECT id, email, created_at FROM users WHERE email = ?").get(normalizeEmail(email)) as UserRow | undefined);
-export const userById = (id: string) => toUser(db().prepare("SELECT id, email, created_at FROM users WHERE id = ?").get(id) as UserRow | undefined);
+export const userByEmail = async (email: string) => toUser(await one<UserRow>("SELECT id, email, created_at FROM users WHERE email = $1", [normalizeEmail(email)]));
+export const userById = async (id: string) => toUser(await one<UserRow>("SELECT id, email, created_at FROM users WHERE id = $1", [id]));
 
 /** Starts a session and returns the cookie to set. */
-export function startSession(userId: string, now = Date.now()): string {
+export async function startSession(userId: string, now = Date.now()): Promise<string> {
   const token = randomBytes(32).toString("base64url");
-  db().prepare("INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)").run(hashToken(token), userId, now, now + SESSION_TTL);
+  await query("INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES ($1, $2, $3, $4)", [hashToken(token), userId, now, now + SESSION_TTL]);
   return sessionCookie(token, SESSION_TTL / 1000);
 }
 
@@ -70,27 +64,36 @@ function sessionToken(req: Request): string | null {
 }
 
 /** The signed-in account for a request, if any. */
-export function sessionUser(req: Request, now = Date.now()): User | null {
+export async function sessionUser(req: Request, now = Date.now()): Promise<User | null> {
   const token = sessionToken(req);
   if (!token) return null;
-  const row = db().prepare("SELECT user_id, expires_at FROM sessions WHERE token_hash = ?").get(hashToken(token)) as { user_id: string; expires_at: number } | undefined;
-  if (!row || row.expires_at < now) return null;
-  return userById(row.user_id);
+  return toUser(
+    await one<UserRow>(
+      "SELECT u.id, u.email, u.created_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at >= $2",
+      [hashToken(token), now],
+    ),
+  );
 }
 
 /** Ends the request's session and returns the cookie that clears it. */
-export function endSession(req: Request): string {
+export async function endSession(req: Request): Promise<string> {
   const token = sessionToken(req);
-  if (token) db().prepare("DELETE FROM sessions WHERE token_hash = ?").run(hashToken(token));
+  if (token) await query("DELETE FROM sessions WHERE token_hash = $1", [hashToken(token)]);
   return sessionCookie("", 0);
 }
 
 /**
- * Whether the caller may edit an avatar: they hold its edit token (the
+ * Whether the caller may edit a loaded avatar: they hold its edit token (the
  * browser that created it) or are signed in to the account that owns it.
  */
-export function canEdit(req: Request, avatarId: string, editToken = req.headers.get("x-edit-token")): boolean {
-  if (verifyEditToken(avatarId, editToken)) return true;
-  const user = sessionUser(req);
-  return !!user && avatarOwner(avatarId) === user.id;
+export async function mayEdit(req: Request, avatar: LoadedAvatar, editToken = req.headers.get("x-edit-token")): Promise<boolean> {
+  if (tokenMatches(avatar.editTokenHash, editToken)) return true;
+  if (!avatar.ownerId) return false;
+  return (await sessionUser(req))?.id === avatar.ownerId;
+}
+
+/** As `mayEdit`, for an avatar known only by id. */
+export async function canEdit(req: Request, avatarId: string, editToken = req.headers.get("x-edit-token")): Promise<boolean> {
+  const avatar = await loadAvatar(avatarId);
+  return !!avatar && mayEdit(req, avatar, editToken);
 }

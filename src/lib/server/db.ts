@@ -1,72 +1,19 @@
 import "server-only";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { mkdirSync } from "node:fs";
-import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { DEFAULT_APPEARANCE } from "@/lib/avatar/options";
 import { EMPTY_CONTEXT } from "@/lib/avatar/context";
 import { DEFAULT_PERSONA, type AvatarRecord, type Persona } from "@/lib/avatar/types";
-import { config } from "./config";
+import { one, query, transaction } from "./pg";
 
 /**
- * Minimal persistence: one SQLite table holding each avatar as a JSON
- * document, plus indexed columns for lookups. Swap this module for Postgres
- * (or anything else) in production; nothing else touches SQL.
+ * Avatars in Postgres: each one is a JSON document, with the fields that are
+ * looked up (slug, owner) or must be unique as columns beside it. Nothing
+ * outside this folder writes SQL for avatars.
  */
 
-type Row = { id: string; data: string; edit_token_hash: string };
-
-const g = globalThis as unknown as { __iidentDb?: DatabaseSync };
-
-export function db(): DatabaseSync {
-  if (g.__iidentDb) return g.__iidentDb;
-  mkdirSync(config.dataDir, { recursive: true });
-  const conn = new DatabaseSync(path.join(config.dataDir, "app.db"));
-  conn.exec(`
-    PRAGMA journal_mode = WAL;
-    CREATE TABLE IF NOT EXISTS avatars (
-      id TEXT PRIMARY KEY,
-      slug TEXT UNIQUE,
-      published INTEGER NOT NULL DEFAULT 0,
-      edit_token_hash TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      data TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      email TEXT NOT NULL UNIQUE,
-      created_at INTEGER NOT NULL,
-      data TEXT NOT NULL DEFAULT '{}'
-    );
-    CREATE TABLE IF NOT EXISTS login_tokens (
-      token_hash TEXT PRIMARY KEY,
-      email TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      expires_at INTEGER NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS sessions (
-      token_hash TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      expires_at INTEGER NOT NULL
-    );
-  `);
-  // Avatars made before accounts existed have no owner column.
-  const columns = conn.prepare("PRAGMA table_info(avatars)").all() as { name: string }[];
-  if (!columns.some((c) => c.name === "owner_id")) {
-    conn.exec("ALTER TABLE avatars ADD COLUMN owner_id TEXT; CREATE INDEX IF NOT EXISTS avatars_owner ON avatars (owner_id);");
-  }
-  g.__iidentDb = conn;
-  return conn;
-}
+type Row = { data: StoredRecord; edit_token_hash: string; owner_id: string | null };
 
 export const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
-
-function parse(row: Row | undefined): AvatarRecord | null {
-  if (!row) return null;
-  return normalizeRecord(JSON.parse(row.data));
-}
 
 type StoredRecord = Omit<AvatarRecord, "persona" | "context"> & {
   persona: Persona & { knowledge?: string };
@@ -95,7 +42,10 @@ export function newAvatarId(): string {
   }
 }
 
-export function createAvatar(ownerId?: string): { record: AvatarRecord; editToken: string } {
+/** JSONB cannot hold NUL characters, which can arrive in pasted text. */
+const toJson = (value: unknown) => JSON.stringify(value, (_k, v) => (typeof v === "string" && v.includes("\0") ? v.replaceAll("\0", "") : v));
+
+export async function createAvatar(ownerId?: string): Promise<{ record: AvatarRecord; editToken: string }> {
   const id = newAvatarId();
   const editToken = randomBytes(24).toString("base64url");
   const now = Date.now();
@@ -111,80 +61,85 @@ export function createAvatar(ownerId?: string): { record: AvatarRecord; editToke
     persona: DEFAULT_PERSONA,
     context: EMPTY_CONTEXT,
   };
-  db()
-    .prepare(
-      "INSERT INTO avatars (id, slug, published, edit_token_hash, created_at, updated_at, data, owner_id) VALUES (?, NULL, 0, ?, ?, ?, ?, ?)",
-    )
-    .run(id, hashToken(editToken), now, now, JSON.stringify(record), ownerId ?? null);
+  await query(
+    "INSERT INTO avatars (id, slug, published, owner_id, edit_token_hash, created_at, updated_at, data) VALUES ($1, NULL, FALSE, $2, $3, $4, $4, $5::jsonb)",
+    [id, ownerId ?? null, hashToken(editToken), now, toJson(record)],
+  );
   return { record, editToken };
 }
 
-export function getAvatar(id: string): AvatarRecord | null {
-  const row = db().prepare("SELECT id, data, edit_token_hash FROM avatars WHERE id = ?").get(id) as
-    | Row
-    | undefined;
-  return parse(row ? { ...row } : undefined);
+const COLUMNS = "data, edit_token_hash, owner_id";
+
+export type LoadedAvatar = { record: AvatarRecord; editTokenHash: string; ownerId: string | null };
+
+const loaded = (row: Row | undefined): LoadedAvatar | null =>
+  row ? { record: normalizeRecord(row.data), editTokenHash: row.edit_token_hash, ownerId: row.owner_id } : null;
+
+/** An avatar together with what decides who may edit it, in one query. */
+export async function loadAvatar(id: string): Promise<LoadedAvatar | null> {
+  return loaded(await one<Row>(`SELECT ${COLUMNS} FROM avatars WHERE id = $1`, [id]));
 }
 
-export function getAvatarBySlug(slug: string): AvatarRecord | null {
-  const row = db()
-    .prepare("SELECT id, data, edit_token_hash FROM avatars WHERE slug = ? AND published = 1")
-    .get(slug.toLowerCase()) as Row | undefined;
-  return parse(row ? { ...row } : undefined);
+export async function getAvatar(id: string): Promise<AvatarRecord | null> {
+  return (await loadAvatar(id))?.record ?? null;
 }
 
-export function verifyEditToken(id: string, token: string | null | undefined): boolean {
+export async function getAvatarBySlug(slug: string): Promise<AvatarRecord | null> {
+  return loaded(await one<Row>(`SELECT ${COLUMNS} FROM avatars WHERE slug = $1 AND published`, [slug.toLowerCase()]))?.record ?? null;
+}
+
+/** Whether `token` is the edit token whose hash is stored with an avatar. */
+export function tokenMatches(editTokenHash: string, token: string | null | undefined): boolean {
   if (!token) return false;
-  const row = db().prepare("SELECT edit_token_hash FROM avatars WHERE id = ?").get(id) as
-    | { edit_token_hash: string }
-    | undefined;
-  if (!row) return false;
-  const a = Buffer.from(row.edit_token_hash, "hex");
+  const a = Buffer.from(editTokenHash, "hex");
   const b = Buffer.from(hashToken(token), "hex");
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/**
- * Read-modify-write a record. SQLite access is synchronous, so within one
- * Node process the callback runs without interleaving.
- */
-export function updateAvatar(
-  id: string,
-  mutate: (record: AvatarRecord) => AvatarRecord | void,
-): AvatarRecord {
-  const current = getAvatar(id);
-  if (!current) throw new Error(`Avatar ${id} not found`);
-  const draft = structuredClone(current);
-  const next = (mutate(draft) ?? draft) as AvatarRecord;
-  next.updatedAt = Date.now();
-  db()
-    .prepare("UPDATE avatars SET slug = ?, published = ?, updated_at = ?, data = ? WHERE id = ?")
-    .run(next.slug, next.published ? 1 : 0, next.updatedAt, JSON.stringify(next), id);
-  return next;
+export async function verifyEditToken(id: string, token: string | null | undefined): Promise<boolean> {
+  if (!token) return false;
+  const row = await one<{ edit_token_hash: string }>("SELECT edit_token_hash FROM avatars WHERE id = $1", [id]);
+  return !!row && tokenMatches(row.edit_token_hash, token);
 }
 
-export function isSlugTaken(slug: string, exceptId?: string): boolean {
-  const row = db().prepare("SELECT id FROM avatars WHERE slug = ?").get(slug.toLowerCase()) as
-    | { id: string }
-    | undefined;
+/**
+ * Read-modify-write a record. The row is locked for the duration, so
+ * concurrent updates (from any server instance) apply one after another and
+ * `mutate` always sees the latest record. Keep `mutate` synchronous and free
+ * of side effects. Returning `false` leaves the record as it is.
+ */
+export async function updateAvatar(id: string, mutate: (record: AvatarRecord) => AvatarRecord | void | false): Promise<AvatarRecord> {
+  return transaction(async (tx) => {
+    const [row] = await tx.query<{ data: StoredRecord }>("SELECT data FROM avatars WHERE id = $1 FOR UPDATE", [id]);
+    if (!row) throw new Error(`Avatar ${id} not found`);
+    const current = normalizeRecord(row.data);
+    const draft = structuredClone(current);
+    const result = mutate(draft);
+    if (result === false) return current;
+    const next = result ?? draft;
+    next.updatedAt = Date.now();
+    await tx.query("UPDATE avatars SET slug = $2, published = $3, updated_at = $4, data = $5::jsonb WHERE id = $1", [id, next.slug, next.published, next.updatedAt, toJson(next)]);
+    return next;
+  });
+}
+
+export async function isSlugTaken(slug: string, exceptId?: string): Promise<boolean> {
+  const row = await one<{ id: string }>("SELECT id FROM avatars WHERE slug = $1", [slug.toLowerCase()]);
   return !!row && row.id !== exceptId;
 }
 
 /** The account an avatar belongs to, if it has been attached to one. */
-export function avatarOwner(id: string): string | null {
-  const row = db().prepare("SELECT owner_id FROM avatars WHERE id = ?").get(id) as { owner_id: string | null } | undefined;
-  return row?.owner_id ?? null;
+export async function avatarOwner(id: string): Promise<string | null> {
+  return (await one<{ owner_id: string | null }>("SELECT owner_id FROM avatars WHERE id = $1", [id]))?.owner_id ?? null;
 }
 
 /** Attaches an avatar to an account unless it already belongs to one. Returns whether it is now theirs. */
-export function claimAvatar(id: string, userId: string): boolean {
-  db().prepare("UPDATE avatars SET owner_id = ? WHERE id = ? AND owner_id IS NULL").run(userId, id);
-  return avatarOwner(id) === userId;
+export async function claimAvatar(id: string, userId: string): Promise<boolean> {
+  const row = await one<{ owner_id: string | null }>("UPDATE avatars SET owner_id = COALESCE(owner_id, $2) WHERE id = $1 RETURNING owner_id", [id, userId]);
+  return row?.owner_id === userId;
 }
 
-export function avatarsOwnedBy(userId: string): AvatarRecord[] {
-  const rows = db()
-    .prepare("SELECT id, data, edit_token_hash FROM avatars WHERE owner_id = ? ORDER BY updated_at DESC")
-    .all(userId) as Row[];
-  return rows.map((row) => parse({ ...row })!);
+export async function avatarsOwnedBy(userId: string): Promise<AvatarRecord[]> {
+  const rows = await query<Row>(`SELECT ${COLUMNS} FROM avatars WHERE owner_id = $1 ORDER BY updated_at DESC`, [userId]);
+  return rows.map((row) => normalizeRecord(row.data));
 }

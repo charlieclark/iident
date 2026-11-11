@@ -10,8 +10,8 @@ const bodySchema = z.object({
 /** Speaks a line in the avatar's current voice, or auditions a stock voice. */
 export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/[id]/voice/preview">) => {
   const { id } = await ctx.params;
-  rateLimit(req, "tts", 20);
-  const record = requireOwner(req, id);
+  await rateLimit(req, "tts", 20);
+  const record = await requireOwner(req, id);
   const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) throw new HttpError(400, "Invalid preview request.");
   const text = parsed.data.text?.trim() || greetingFor(record.persona);

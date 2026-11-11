@@ -13,11 +13,14 @@ const bodySchema = z.object({
  * its edit token, and an avatar that already belongs to an account stays there.
  */
 export const POST = handle(async (req: Request) => {
-  rateLimit(req, "claim", 10);
-  const user = sessionUser(req);
+  await rateLimit(req, "claim", 10);
+  const user = await sessionUser(req);
   if (!user) throw new HttpError(401, "Sign in first.");
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) throw new HttpError(400, "Invalid request.");
-  const claimed = parsed.data.drafts.filter((d) => verifyEditToken(d.id, d.token) && claimAvatar(d.id, user.id)).map((d) => d.id);
+  const claimed: string[] = [];
+  for (const d of parsed.data.drafts) {
+    if ((await verifyEditToken(d.id, d.token)) && (await claimAvatar(d.id, user.id))) claimed.push(d.id);
+  }
   return Response.json({ claimed });
 });

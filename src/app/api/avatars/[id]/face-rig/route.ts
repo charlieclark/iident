@@ -38,13 +38,13 @@ const rigSchema = z.object({
 const bodySchema = z.object({
   rig: rigSchema,
   /** PNG data URL of the finished avatar, used for link previews. */
-  thumbnail: z.string().startsWith("data:image/png;base64,").max(6_000_000).optional(),
+  thumbnail: z.string().startsWith("data:image/png;base64,").max(4_000_000).optional(),
 });
 
 /** Saves the face landmarks computed in the creator's browser (and a thumbnail). */
 export const PUT = handle(async (req: Request, ctx: RouteContext<"/api/avatars/[id]/face-rig">) => {
   const { id } = await ctx.params;
-  const record = requireOwner(req, id);
+  const record = await requireOwner(req, id);
   if (record.model?.status !== "ready") throw new HttpError(400, "The 3D character isn't ready yet.");
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) throw new HttpError(400, "Invalid face data.");
@@ -74,9 +74,9 @@ export const PUT = handle(async (req: Request, ctx: RouteContext<"/api/avatars/[
       .toBuffer();
     thumbKey = await putFile(id, `thumb-${Date.now().toString(36)}.webp`, webp);
   }
-  const updated = updateAvatar(id, (r) => {
+  const updated = await updateAvatar(id, (r) => {
     r.faceRig = parsed.data.rig;
     if (thumbKey) r.thumbnail = thumbKey;
   });
-  return Response.json({ avatar: ownerView(updated) });
+  return Response.json({ avatar: await ownerView(updated) });
 });

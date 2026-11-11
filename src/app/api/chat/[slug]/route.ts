@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { toPublicItem, type PublicItem } from "@/lib/avatar/context";
 import type { AvatarRecord } from "@/lib/avatar/types";
-import { canEdit } from "@/lib/server/auth";
-import { getAvatar, getAvatarBySlug } from "@/lib/server/db";
+import { mayEdit } from "@/lib/server/auth";
+import { getAvatarBySlug, loadAvatar } from "@/lib/server/db";
 import { HttpError, handle, rateLimit } from "@/lib/server/http";
 import { SentenceChunker, sanitizeHistory, streamReply } from "@/lib/server/persona";
-import { countReply, limitMessage, overLimit } from "@/lib/server/usage";
+import { countReply, isOver, limitMessage, replyAllowance } from "@/lib/server/usage";
 import { createSpeaker, greetingFor, usesClonedVoice } from "@/lib/server/voice";
 
 const bodySchema = z.object({
@@ -19,13 +19,13 @@ const bodySchema = z.object({
   previewId: z.string().max(32).optional(),
 });
 
-function resolveAvatar(req: Request, slug: string, previewId?: string): AvatarRecord {
+async function resolveAvatar(req: Request, slug: string, previewId?: string): Promise<AvatarRecord> {
   if (previewId) {
-    if (!canEdit(req, previewId)) throw new HttpError(403, "No access.");
-    const r = getAvatar(previewId);
-    if (r) return r;
+    const avatar = await loadAvatar(previewId);
+    if (!avatar || !(await mayEdit(req, avatar))) throw new HttpError(403, "No access.");
+    return avatar.record;
   }
-  const r = getAvatarBySlug(slug);
+  const r = await getAvatarBySlug(slug);
   if (!r) throw new HttpError(404, "This avatar doesn't exist or isn't published.");
   return r;
 }
@@ -44,16 +44,23 @@ function resolveAvatar(req: Request, slug: string, previewId?: string): AvatarRe
  * Speech for each sentence starts as soon as the sentence completes, so the
  * avatar starts talking before Claude finishes the reply.
  */
+/** A long reply with speech can stream for a while. */
+export const maxDuration = 300;
+
 export const POST = handle(async (req: Request, ctx: RouteContext<"/api/chat/[slug]">) => {
   const { slug } = await ctx.params;
-  rateLimit(req, "chat", 40);
+  await rateLimit(req, "chat", 40);
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) throw new HttpError(400, "Invalid message.");
-  const record = resolveAvatar(req, slug, parsed.data.previewId);
+  const record = await resolveAvatar(req, slug, parsed.data.previewId);
   const history = sanitizeHistory(parsed.data.messages);
   if (!parsed.data.greet && history[history.length - 1]?.role !== "user") {
     throw new HttpError(400, "Say something first.");
   }
+
+  // Out of replies for the month: answer in text only, with no model call or speech to pay for.
+  const preview = !!parsed.data.previewId;
+  const allowance = parsed.data.greet || preview ? null : await replyAllowance(record);
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -67,10 +74,8 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/chat/[sl
           closed = true;
         }
       };
-      // Out of replies for the month: answer in text only, with no model call or speech to pay for.
-      const preview = !!parsed.data.previewId;
-      if (!parsed.data.greet && !preview && overLimit(record)) {
-        const text = limitMessage(record);
+      if (allowance && isOver(allowance)) {
+        const text = limitMessage(record, allowance);
         send({ type: "text", delta: text });
         send({ type: "done", text, limited: true });
         closed = true;
@@ -117,7 +122,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/chat/[sl
           }
           for (const sentence of chunker.flush()) say(sentence);
           await speaker.done();
-          if (!preview && full.trim()) countReply(record.id);
+          if (!preview && full.trim()) await countReply(record.id);
           send({ type: "done", text: full.trim(), shown });
         }
       } catch (err) {

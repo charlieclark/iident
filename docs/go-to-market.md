@@ -97,6 +97,6 @@ What still gets in the way, in order of impact:
 1. Merge the open work (crisper voice, house style and sketches, metering).
 2. Try the creator yourself with your own selfie and voice; check the likeness and the 3D result on your phone.
 3. ~~Decide: Liinks first, or standalone first.~~ Decided: standalone first. Accounts and Stripe billing are built.
-4. Connect a Stripe account (test mode first) and an email service, deploy, and run one real purchase.
+4. Connect a Stripe account (test mode first) and an email service, deploy to Vercel ([deploying.md](deploying.md)), and run one real purchase.
 5. Decide Pro's reply allowance or the chat model (see the margin table above).
 6. Put five real people through it.

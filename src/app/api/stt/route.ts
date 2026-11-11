@@ -1,15 +1,14 @@
 import { transcribe, uploadToFal } from "@/lib/server/fal";
-import { HttpError, handle, rateLimit } from "@/lib/server/http";
+import { HttpError, MAX_UPLOAD_BYTES, handle, rateLimit } from "@/lib/server/http";
 
-const MAX_BYTES = 10 * 1024 * 1024;
 
 /** Transcribes a short voice message from a visitor. */
 export const POST = handle(async (req: Request) => {
-  rateLimit(req, "stt", 30);
+  await rateLimit(req, "stt", 30);
   const form = await req.formData();
   const file = form.get("file");
   if (!(file instanceof File) || file.size === 0) throw new HttpError(400, "No audio received.");
-  if (file.size > MAX_BYTES) throw new HttpError(413, "That recording is too long.");
+  if (file.size > MAX_UPLOAD_BYTES) throw new HttpError(413, "That recording is too long.");
   const type = file.type || "audio/webm";
   const ext =
     [

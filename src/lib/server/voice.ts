@@ -128,14 +128,16 @@ const recreations = new Map<string, Promise<string>>();
 /**
  * Re-creates an avatar's clone with `provider` from the stored recording:
  * after switching clone providers, or when the clone went missing. Runs once
- * even if several visitors arrive together; the old clone is freed.
+ * per server instance even if several visitors arrive together (two
+ * instances can each make one; the later save wins and the other clone is
+ * left unused). The old clone is freed.
  */
 function recreateClone(record: AvatarRecord, provider: "fish" | "elevenlabs"): Promise<string> {
   let pending = recreations.get(record.id);
   if (!pending) {
     pending = (async () => {
       const made = await makeClone(record, provider, await storedSample(record), record.voice?.sampleText);
-      updateAvatar(record.id, (r) => {
+      await updateAvatar(record.id, (r) => {
         if (r.voice) r.voice = { ...r.voice, provider, ...made, previewUrl: undefined };
       });
       freeClone(record.voice, made.voiceId);
@@ -184,7 +186,7 @@ async function speakMinimaxAs(record: AvatarRecord, text: string, voiceId: strin
     const isClone = usesClonedVoice(record) && (voice?.provider ?? "minimax") === "minimax" && voice?.voiceId === voiceId;
     if (!isClone || !voice?.sampleUrl) throw err;
     const fresh = await cloneMinimax({ audioUrl: voice.sampleUrl, previewText: text.slice(0, 200) });
-    updateAvatar(record.id, (r) => {
+    await updateAvatar(record.id, (r) => {
       if (r.voice) r.voice = { ...r.voice, voiceId: fresh.voiceId };
     });
     return speakMinimax({ text, voiceId: fresh.voiceId });
@@ -210,7 +212,7 @@ function fishReference(record: AvatarRecord): Promise<fish.FishReference> {
       if (!text) {
         text = await transcribeSample(record, sample);
         const saved = text;
-        updateAvatar(record.id, (r) => {
+        await updateAvatar(record.id, (r) => {
           if (r.voice?.sampleFile === key) r.voice = { ...r.voice, sampleText: saved };
         });
       }
