@@ -1,8 +1,6 @@
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { decode } from "@msgpack/msgpack";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { freshDatabase } from "../../../../test/database";
 import type { AvatarRecord } from "@/lib/avatar/types";
 
 // Speech-to-text runs on fal; stub it so transcripts are predictable.
@@ -20,7 +18,7 @@ describe("voice selection", () => {
   let storage: typeof import("../storage");
 
   beforeAll(async () => {
-    process.env.DATA_DIR = mkdtempSync(path.join(tmpdir(), "iident-voice-"));
+    await freshDatabase("voice");
     process.env.TTS_PROVIDER = "elevenlabs";
     ({ config } = await import("../config"));
     voice = await import("../voice");
@@ -73,9 +71,9 @@ describe("voice selection", () => {
 
   /** An avatar in the database with a stored recording and an ElevenLabs clone. */
   async function avatarWithRecording(provider: "elevenlabs" | "fish", voiceId: string, sampleText?: string) {
-    const { record } = db.createAvatar();
+    const { record } = await db.createAvatar();
     const sampleFile = await storage.putFile(record.id, "voice-test.wav", new Uint8Array([82, 73, 70, 70]));
-    return db.updateAvatar(record.id, (r) => {
+    return await db.updateAvatar(record.id, (r) => {
       r.persona.name = "Sam";
       r.voice = { mode: "clone", provider, voiceId, sampleFile, createdAt: 1, ...(sampleText ? { sampleText } : {}) };
     });
@@ -105,7 +103,7 @@ describe("voice selection", () => {
     // Inline cloning stores nothing at Fish: the recording and its transcript are enough.
     expect(await voice.resolveVoice(record)).toEqual({ provider: "fish", voiceId: "" });
     await vi.waitFor(() => expect(calls).toContain("DELETE https://api.elevenlabs.io/v1/voices/el-clone"));
-    expect(db.getAvatar(record.id)?.voice).toMatchObject({ mode: "clone", provider: "fish", voiceId: "", sampleText: "Hello, this is Sam." });
+    expect((await db.getAvatar(record.id))?.voice).toMatchObject({ mode: "clone", provider: "fish", voiceId: "", sampleText: "Hello, this is Sam." });
   });
 
   it("speaks a Fish inline clone with the stored recording and its transcript", async () => {
@@ -139,7 +137,7 @@ describe("voice selection", () => {
     });
     expect(await voice.resolveVoice(record)).toEqual({ provider: "fish", voiceId: "fish-model" });
     await vi.waitFor(() => expect(calls).toContain("DELETE https://api.elevenlabs.io/v1/voices/el-clone-2"));
-    expect(db.getAvatar(record.id)?.voice).toMatchObject({ mode: "clone", provider: "fish", voiceId: "fish-model" });
+    expect((await db.getAvatar(record.id))?.voice).toMatchObject({ mode: "clone", provider: "fish", voiceId: "fish-model" });
   });
 
   it("rebuilds a Fish model that went missing, then keeps talking", async () => {
@@ -162,6 +160,6 @@ describe("voice selection", () => {
     await speaker.done();
     expect(events.map((e) => e.type)).toEqual(["chunk", "chunk", "pcm", "pcm_end", "pcm", "pcm_end"]);
     expect(calls.filter((c) => c === "POST https://api.fish.audio/model")).toHaveLength(1);
-    expect(db.getAvatar(record.id)?.voice?.voiceId).toBe("new-model");
+    expect((await db.getAvatar(record.id))?.voice?.voiceId).toBe("new-model");
   });
 });

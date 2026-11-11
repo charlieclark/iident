@@ -4,7 +4,9 @@ import { config, requireFal } from "./config";
 
 /**
  * Thin, typed wrappers around the fal endpoints the app uses. Every call goes
- * through fal's queue (queue.fal.run) so long jobs survive slow starts.
+ * through fal's queue (queue.fal.run). Calls that finish within a request
+ * (images, speech) wait for their result here; the 3D steps are submitted
+ * and collected separately (see `submitMesh`).
  */
 
 let client: FalClient | null = null;
@@ -19,13 +21,9 @@ type FalFile = { url: string; content_type?: string; file_size?: number | null }
 async function run<T>(
   endpoint: string,
   input: Record<string, unknown>,
-  opts: { onEnqueue?: (requestId: string) => void; pollInterval?: number } = {},
+  opts: { pollInterval?: number } = {},
 ): Promise<T> {
-  const result = await fal().subscribe(endpoint, {
-    input,
-    pollInterval: opts.pollInterval ?? 1000,
-    onEnqueue: opts.onEnqueue,
-  });
+  const result = await fal().subscribe(endpoint, { input, pollInterval: opts.pollInterval ?? 1000 });
   return result.data as T;
 }
 
@@ -94,11 +92,25 @@ export async function generateBackdrop(prompt: string): Promise<string> {
   return url;
 }
 
+/**
+ * The 3D steps take minutes, longer than one serverless request may run. So
+ * they are submitted to fal's queue and collected later: `submit*` returns
+ * the request id to keep, `*Result` returns null while the request is still
+ * running and throws if it failed.
+ */
+async function submit(endpoint: string, input: Record<string, unknown>, webhookUrl?: string): Promise<string> {
+  const { request_id } = await fal().queue.submit(endpoint, { input, webhookUrl });
+  return request_id;
+}
+
+async function collect<T>(endpoint: string, requestId: string): Promise<T | null> {
+  const { status } = await fal().queue.status(endpoint, { requestId });
+  if (status !== "COMPLETED") return null;
+  return (await fal().queue.result(endpoint, { requestId })).data as T;
+}
+
 /** Character sheet -> textured mesh in A-pose (no rig yet). */
-export async function generateMesh(
-  imageUrl: string,
-  onEnqueue?: (id: string) => void,
-): Promise<{ glbUrl: string; thumbnailUrl?: string }> {
+export function submitMesh(imageUrl: string, webhookUrl?: string): Promise<string> {
   // Meshy's faster "Smart Topology" models (t2, t2.5) cap out at 15k triangles
   // and take fewer options; the standard models get a denser mesh, which
   // gives the face rig more vertices around the mouth.
@@ -114,11 +126,14 @@ export async function generateMesh(
         should_texture: true,
         enable_pbr: false,
       };
-  const out = await run<{ model_glb: FalFile; thumbnail?: FalFile | null }>(config.models.imageTo3d, input, {
-    onEnqueue,
-    pollInterval: 3000,
-  });
-  return { glbUrl: out.model_glb.url, thumbnailUrl: out.thumbnail?.url };
+  return submit(config.models.imageTo3d, input, webhookUrl);
+}
+
+export async function meshResult(requestId: string): Promise<{ glbUrl: string } | null> {
+  const out = await collect<{ model_glb?: FalFile | null }>(config.models.imageTo3d, requestId);
+  if (!out) return null;
+  if (!out.model_glb?.url) throw new Error("The 3D service returned no model");
+  return { glbUrl: out.model_glb.url };
 }
 
 /**
@@ -136,23 +151,21 @@ export const ANIMATION_CLIPS = [
   { name: "shrug", actionId: 317 }, // Shrug
 ] as const;
 
-export async function rigAndAnimate(params: {
-  glbUrl: string;
-  heightMeters: number;
-  onEnqueue?: (id: string) => void;
-}): Promise<{ riggedGlbUrl: string; clips: { name: string; glbUrl: string }[] }> {
-  const out = await run<{
+/** Mesh -> humanoid rig plus the animation clips above. */
+export function submitRig(params: { glbUrl: string; heightMeters: number }, webhookUrl?: string): Promise<string> {
+  return submit(
+    config.models.rigging,
+    { model_url: params.glbUrl, height_meters: params.heightMeters, animation_action_ids: ANIMATION_CLIPS.map((c) => c.actionId) },
+    webhookUrl,
+  );
+}
+
+export async function rigResult(requestId: string): Promise<{ riggedGlbUrl: string; clips: { name: string; glbUrl: string }[] } | null> {
+  const out = await collect<{
     rigged_character_glb?: FalFile | null;
     animations?: { action_id: number; animation_glb?: FalFile | null }[];
-  }>(
-    config.models.rigging,
-    {
-      model_url: params.glbUrl,
-      height_meters: params.heightMeters,
-      animation_action_ids: ANIMATION_CLIPS.map((c) => c.actionId),
-    },
-    { onEnqueue: params.onEnqueue, pollInterval: 3000 },
-  );
+  }>(config.models.rigging, requestId);
+  if (!out) return null;
   if (!out.rigged_character_glb?.url) throw new Error("Rigging returned no character");
   const clips: { name: string; glbUrl: string }[] = [];
   for (const anim of out.animations ?? []) {

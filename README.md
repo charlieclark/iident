@@ -60,7 +60,7 @@ During the 3D build the creator keeps going (voice, persona) and sees a turntabl
 
 ## Running locally
 
-Requirements: Node 22.13+ (uses the built-in `node:sqlite`).
+Requirements: Node 22.13+. No database to install: without `DATABASE_URL`, an embedded Postgres keeps its data in `./data/pg`.
 
 ```bash
 npm install
@@ -80,7 +80,7 @@ Open http://localhost:3000 and click **Create your avatar**.
 
 Without `ANTHROPIC_API_KEY` the avatar still talks, but replies with a setup hint instead of a real answer, or shows the item whose title best matches the visitor's words (handy for testing cards). Add `FISH_API_KEY` to clone voices with Fish Audio; without it, clones are made with ElevenLabs. Without `ELEVENLABS_API_KEY`, stock voices and speech fall back to MiniMax on fal (several seconds per sentence). Without `FAL_KEY`, generation endpoints return a clear 503.
 
-Data (SQLite database and files) is written to `./data`.
+Data (the embedded Postgres and files) is written to `./data`. An older `data/app.db` (SQLite) is carried over into it the first time the app starts. To deploy, see [docs/deploying.md](docs/deploying.md).
 
 ### Tests and checks
 
@@ -95,6 +95,8 @@ npm run lint
 ```bash
 npx tsc --noEmit
 ```
+
+Tests run on the embedded Postgres. To run them against a Postgres server instead (the driver used in production), set `TEST_DATABASE_URL` to a connection the tests may create databases on.
 
 A developer harness for the avatar runtime is available at `/dev/avatar` in development (expects a merged GLB at `public/dev/sample.glb`).
 
@@ -115,13 +117,14 @@ src/
     api/voices                stock voices for the active speech provider
     api/stt                   visitor speech-to-text
     api/files/[...key]        stored assets (selfies, voice samples and concepts are owner-only)
+    api/fal/webhook           fal reports a finished 3D step here, so builds carry on unattended
   components/
     create/                   creator steps
     AvatarStage.tsx           React wrapper around the three.js player
     AvatarChat.tsx            chat UI with push-to-talk
     ItemCard.tsx              cards for links, products, images and inline videos
   lib/avatar/                 options + prompt builder, context (knowledge + items), player, face rigger/driver, lip sync
-  lib/server/                 config, SQLite store, storage, fal wrappers, GLB merge, jobs, persona, speech (ElevenLabs, Fish Audio)
+  lib/server/                 config, Postgres (pg, schema, db), storage (Vercel Blob or disk), fal wrappers, GLB merge, the 3D build (jobs), persona, speech (ElevenLabs, Fish Audio)
   lib/client/                 API client, recorder + WAV encoder, SSE client, selfie checks
 ```
 
@@ -151,12 +154,13 @@ Setting up Stripe: set `STRIPE_SECRET_KEY`; add a webhook endpoint at `/api/bill
 - The public page labels the avatar as an AI, and the persona prompt requires it to say so when asked, avoid commitments on the person's behalf, stick to the facts the creator provided and never share private contact, financial or health details.
 - Selfies, their clean portraits, voice samples and concept images are only served to the owner; the public page only exposes the 3D model and a thumbnail.
 - An avatar can be edited by the browser that created it (a random edit token kept in that browser) and by the account it belongs to. Accounts sign in with a one-time email link (20 minutes, single use, 5 an hour per address) that starts a 60-day session in an httpOnly, SameSite=Lax cookie. Only hashes of edit tokens, link tokens and session tokens are stored. An avatar that belongs to an account can't be claimed by another one.
-- Basic per-IP rate limits protect the expensive endpoints, and each avatar has a monthly cap on replies to visitors (`MONTHLY_REPLY_LIMIT`, default 300): past it, the avatar answers in text only until the next month.
+- Per-IP rate limits (counted in the database, with the addresses hashed) protect the expensive endpoints, and each avatar has a monthly cap on replies to visitors (`MONTHLY_REPLY_LIMIT`, default 300): past it, the avatar answers in text only until the next month.
 
 ## Production notes
 
-- **Long-running work.** The 3D build runs in-process via `after()`. Deploy on a persistent Node server (Fly.io, Render, Railway, a VM). On serverless platforms move the job to a queue or use fal webhooks. Jobs interrupted by a restart are surfaced as failed so the user can retry.
-- **Storage and database.** `src/lib/server/storage.ts` (local disk) and `src/lib/server/db.ts` (SQLite) are small, isolated modules; swap them for S3/R2 and Postgres for multi-instance deployments.
+- **Hosting.** Built for Vercel: Postgres through `DATABASE_URL`, files in a private Vercel Blob store, and no process that has to stay up. [docs/deploying.md](docs/deploying.md) has the setup steps and how each part copes with short-lived functions.
+- **Long-running work.** A 3D build takes 4 to 13 minutes, so nothing waits for it. The two slow steps run in fal's queue and the avatar's record keeps their request ids; the build moves on one step at a time whenever the creator's page polls or fal calls back (`src/lib/server/jobs.ts`). Any server instance can pick it up, and a step is never submitted twice.
+- **Storage and database.** `src/lib/server/storage.ts` (Vercel Blob, or local disk in development) and `src/lib/server/db.ts` with `pg.ts` (Postgres) are small, isolated modules. Rate limits live in Postgres too, so they hold across instances.
 - **Accounts.** Sign-in emails go through Resend (`RESEND_API_KEY`, `EMAIL_FROM` on a domain verified there). Without a key, development shows the sign-in link on the page and production refuses to sign anyone in. Set `NEXT_PUBLIC_APP_URL` to the public https address: sign-in links are built from it and the session cookie is marked Secure when it is https.
 - **Costs.** Each avatar uses a clean portrait of the selfie at about 4 cents, a first sketch at about 4 cents, later sketches at under a cent each, one or two final renders at about 4 cents, one image-to-3D run, one rigging run and one voice clone; each reply uses one Claude call (two in the rare case it shows cards before saying anything) and one TTS call per sentence.
 - **Voice cloning at scale.** With `FISH_API_KEY` set, cloned voices are spoken by Fish Audio straight from the creator's recording, which goes with each request, so there is no voice limit and nothing to clean up at Fish. Saved Fish voice models (`FISH_VOICE_MODE=model`) skip re-sending the recording, but Fish caps how many the API can create by prepaid credit (an account with no credit can create none). Fish concurrency also depends on prepaid credit: 5 requests under $100, 15 from $100, 50 from $1,000. Clones made with ElevenLabs instead each take a voice slot for as long as the avatar exists (30 on Creator, 160 on Pro, 660 on Scale, 2,200 on Business, per ElevenLabs' pricing page in November 2026) and count against a monthly quota of new voices (95 on Creator). Stock voices use no slots, and re-recording or switching to a stock voice frees the old clone.

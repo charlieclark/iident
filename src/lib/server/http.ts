@@ -2,10 +2,12 @@ import "server-only";
 import { resolveBackdrop } from "@/lib/avatar/backdrop";
 import type { AvatarRecord, PublicAvatar } from "@/lib/avatar/types";
 import { HttpError } from "./config";
-import { canEdit } from "./auth";
-import { getAvatar } from "./db";
+import { createHash } from "node:crypto";
+import { mayEdit } from "./auth";
+import { loadAvatar } from "./db";
+import { one, query } from "./pg";
 import { fileUrl } from "./storage";
-import { replyAllowance, usageOf } from "./usage";
+import { replyAllowance, usageOf, type Allowance } from "./usage";
 
 export { HttpError };
 
@@ -24,34 +26,51 @@ export function handle<A extends unknown[]>(fn: (...args: A) => Promise<Response
     try {
       return await fn(...args);
     } catch (err) {
+      // Next.js signals of its own (such as a GET route declining to be prerendered at build time) pass through.
+      if (typeof (err as { digest?: unknown } | null)?.digest === "string") throw err;
       return errorResponse(err);
     }
   };
 }
 
 /** Loads a draft/avatar and checks the caller may edit it (edit token, or signed in as its owner). */
-export function requireOwner(req: Request, id: string): AvatarRecord {
-  if (!canEdit(req, id)) throw new HttpError(403, "You don't have access to this avatar.");
-  const record = getAvatar(id);
-  if (!record) throw new HttpError(404, "Avatar not found.");
-  return record;
+export async function requireOwner(req: Request, id: string): Promise<AvatarRecord> {
+  const avatar = await loadAvatar(id);
+  // The same answer whether or not the avatar exists, so ids can't be probed.
+  if (!avatar || !(await mayEdit(req, avatar))) throw new HttpError(403, "You don't have access to this avatar.");
+  return avatar.record;
 }
 
-const buckets = new Map<string, { tokens: number; at: number }>();
-
-/** Small in-memory token bucket; good enough for a single instance. */
-export function rateLimit(req: Request, scope: string, perMinute: number) {
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "local";
-  const key = `${scope}:${ip}`;
+/**
+ * A token bucket per caller and scope, kept in the database so that every
+ * server instance counts against the same bucket. One statement refills the
+ * bucket for the time passed and takes a token, or matches no row when it is
+ * empty.
+ */
+export async function rateLimit(req: Request, scope: string, perMinute: number) {
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "local";
+  // Hashed, so the table holds no addresses.
+  const key = createHash("sha256").update(`${scope}:${ip}`).digest("base64url").slice(0, 32);
   const now = Date.now();
-  const b = buckets.get(key) ?? { tokens: perMinute, at: now };
-  b.tokens = Math.min(perMinute, b.tokens + ((now - b.at) / 60_000) * perMinute);
-  b.at = now;
-  if (b.tokens < 1) throw new HttpError(429, "Slow down a little and try again in a moment.");
-  b.tokens -= 1;
-  buckets.set(key, b);
+  const refilled = "LEAST($2::float8, rate_limits.tokens + ($3::bigint - rate_limits.at) / 60000.0 * $2::float8)";
+  const row = await one(
+    `INSERT INTO rate_limits (key, tokens, at) VALUES ($1, $2::float8 - 1, $3::bigint)
+     ON CONFLICT (key) DO UPDATE SET tokens = ${refilled} - 1, at = $3::bigint WHERE ${refilled} >= 1
+     RETURNING tokens`,
+    [key, perMinute, now],
+  );
+  // Now and then, forget buckets nobody has used for an hour.
+  if (Math.random() < 0.01) void query("DELETE FROM rate_limits WHERE at < $1", [now - 3_600_000]).catch(() => {});
+  if (!row) throw new HttpError(429, "Slow down a little and try again in a moment.");
 }
+
+/**
+ * The largest file a request may carry. Vercel turns away request bodies
+ * over 4.5 MB before they reach the app, so the app's own limit sits just
+ * under that everywhere, and the browser shrinks pictures and recordings to
+ * fit before sending them.
+ */
+export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
 export const RESERVED_SLUGS = new Set([
   "a",
@@ -91,9 +110,9 @@ export function validateSlug(slug: string): string | null {
 }
 
 /** What the owner's editor needs (no secrets, files as URLs). */
-export function ownerView(r: AvatarRecord) {
+export async function ownerView(r: AvatarRecord) {
   return {
-    usage: { ...usageOf(r), ...replyAllowance(r) },
+    usage: { ...usageOf(r), ...(await replyAllowance(r)) },
     backdrop: resolveBackdrop(r.backdrop, fileUrl),
     id: r.id,
     slug: r.slug,
@@ -132,10 +151,10 @@ export function ownerView(r: AvatarRecord) {
   };
 }
 
-export type OwnerView = ReturnType<typeof ownerView>;
+export type OwnerView = Awaited<ReturnType<typeof ownerView>>;
 
-/** One row of an account's list of avatars. */
-export function summaryView(r: AvatarRecord) {
+/** One row of an account's list of avatars, with the reply allowance its account gives it. */
+export function summaryView(r: AvatarRecord, allowance: Allowance) {
   // The character image is private to the owner; the list is only shown to them, signed in.
   const concept = r.concepts.find((c) => c.id === r.selectedConceptId) ?? r.concepts.findLast((c) => (c.kind ?? "final") === "final");
   return {
@@ -147,7 +166,7 @@ export function summaryView(r: AvatarRecord) {
     building: !!r.model && r.model.status !== "ready" && r.model.status !== "failed",
     imageUrl: r.thumbnail ? fileUrl(r.thumbnail) : concept ? fileUrl(concept.file) : null,
     updatedAt: r.updatedAt,
-    usage: { ...usageOf(r), ...replyAllowance(r) },
+    usage: { ...usageOf(r), ...allowance },
   };
 }
 

@@ -7,7 +7,7 @@ import { handle, ownerView, rateLimit } from "@/lib/server/http";
  * signed-in creator's draft belongs to their account from the start.
  */
 export const POST = handle(async (req: Request) => {
-  rateLimit(req, "create", 10);
-  const { record, editToken } = createAvatar(sessionUser(req)?.id);
-  return Response.json({ avatar: ownerView(record), editToken });
+  await rateLimit(req, "create", 10);
+  const { record, editToken } = await createAvatar((await sessionUser(req))?.id);
+  return Response.json({ avatar: await ownerView(record), editToken });
 });

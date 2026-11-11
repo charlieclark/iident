@@ -1,22 +1,24 @@
 import { config } from "@/lib/server/config";
 import { updateAvatar } from "@/lib/server/db";
-import { HttpError, handle, ownerView, rateLimit, requireOwner } from "@/lib/server/http";
+import { HttpError, MAX_UPLOAD_BYTES, handle, ownerView, rateLimit, requireOwner } from "@/lib/server/http";
 import { putFile } from "@/lib/server/storage";
 import { cloneRecording } from "@/lib/server/voice";
 
-const MAX_BYTES = 20 * 1024 * 1024;
+/** Cloning a voice can take a minute. */
+export const maxDuration = 300;
+
 const TYPES: Record<string, string> = { "audio/wav": "wav", "audio/x-wav": "wav", "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/x-m4a": "m4a" };
 
 /** Clones the creator's voice from a recorded or uploaded sample (10s+). */
 export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/[id]/voice">) => {
   const { id } = await ctx.params;
   if (!config.voiceCloning) throw new HttpError(403, "Voice cloning is turned off. Pick a stock voice instead.");
-  rateLimit(req, "voice", 6);
-  const record = requireOwner(req, id);
+  await rateLimit(req, "voice", 6);
+  const record = await requireOwner(req, id);
   const form = await req.formData();
   const file = form.get("file");
   if (!(file instanceof File)) throw new HttpError(400, "Attach an audio recording.");
-  if (file.size > MAX_BYTES) throw new HttpError(413, "That recording is too large (max 20 MB).");
+  if (file.size > MAX_UPLOAD_BYTES) throw new HttpError(413, "That recording is too large (max 4 MB).");
   if (form.get("consent") !== "true") {
     throw new HttpError(400, "Please confirm this is your voice, or that you have permission to clone it.");
   }
@@ -31,10 +33,10 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
 
   try {
     const voice = await cloneRecording(record, { data, filename: `voice.${ext}`, contentType, file: sampleFile });
-    const updated = updateAvatar(id, (r) => {
+    const updated = await updateAvatar(id, (r) => {
       r.voice = voice;
     });
-    return Response.json({ avatar: ownerView(updated) });
+    return Response.json({ avatar: await ownerView(updated) });
   } catch (err) {
     console.error("voice clone failed", err);
     throw new HttpError(422, "We couldn't clone that recording. Try again in a quiet room, speaking for 15 to 30 seconds.");

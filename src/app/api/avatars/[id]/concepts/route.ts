@@ -10,6 +10,9 @@ import { HttpError, handle, ownerView, rateLimit, requireOwner } from "@/lib/ser
 import { ensurePortrait } from "@/lib/server/portrait";
 import { download, putFile } from "@/lib/server/storage";
 
+/** Drawing takes 15 to 45 seconds, after a wait for the portrait when the selfie is new. */
+export const maxDuration = 300;
+
 const bodySchema = z.object({
   appearance: appearanceSchema,
   kind: z.enum(["preview", "final"]).default("final"),
@@ -26,9 +29,9 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
   if (!parsed.success) throw new HttpError(400, "Invalid appearance options.");
   const { appearance, kind } = parsed.data;
   // Sketches cost about a cent and redraw as the look changes, so they get a higher per-minute allowance.
-  if (kind === "preview") rateLimit(req, "preview", 20);
-  else rateLimit(req, "generate", 12);
-  const record = requireOwner(req, id);
+  if (kind === "preview") await rateLimit(req, "preview", 20);
+  else await rateLimit(req, "generate", 12);
+  const record = await requireOwner(req, id);
   if (!record.selfie) throw new HttpError(400, "Upload a selfie first.");
 
   // A sketch restyles the picture the main model already drew of this person,
@@ -60,10 +63,10 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
     ...(base ? { parentId: base.id } : {}),
     createdAt: Date.now(),
   };
-  const updated = updateAvatar(id, (r) => {
+  const updated = await updateAvatar(id, (r) => {
     r.appearance = appearance;
     // The picture sketches are made from must outlive the sketches made from it.
     r.concepts = withConcept(r.concepts, concept, sketchBase({ concepts: [concept, ...r.concepts], selfie: r.selfie }));
   });
-  return Response.json({ avatar: ownerView(updated), created: [cid] });
+  return Response.json({ avatar: await ownerView(updated), created: [cid] });
 });

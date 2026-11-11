@@ -1,18 +1,22 @@
+import { after } from "next/server";
 import { z } from "zod";
 import { backdropChoiceSchema } from "@/lib/avatar/backdrop";
 import { contextSchema } from "@/lib/avatar/context";
 import { appearanceSchema } from "@/lib/avatar/options";
-import { getAvatar, updateAvatar } from "@/lib/server/db";
+import { updateAvatar } from "@/lib/server/db";
 import { HttpError, handle, ownerView, requireOwner } from "@/lib/server/http";
-import { reconcileJob } from "@/lib/server/jobs";
+import { advanceModelJob } from "@/lib/server/jobs";
 import { activeProvider, freeClone, presetVoices } from "@/lib/server/voice";
+
+/** Room for the final merge of a model, which runs after the response. */
+export const maxDuration = 300;
 
 export const GET = handle(async (req: Request, ctx: RouteContext<"/api/avatars/[id]">) => {
   const { id } = await ctx.params;
-  requireOwner(req, id);
-  const record = reconcileJob(id);
-  if (!record) throw new HttpError(404, "Avatar not found.");
-  return Response.json({ avatar: ownerView(record) });
+  // The creator polls this while the 3D character is built, and each poll moves the build on.
+  const { record, finish } = await advanceModelJob(await requireOwner(req, id));
+  if (finish) after(finish);
+  return Response.json({ avatar: await ownerView(record) });
 });
 
 const personaSchema = z.object({
@@ -37,7 +41,7 @@ const patchSchema = z.object({
 
 export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/avatars/[id]">) => {
   const { id } = await ctx.params;
-  requireOwner(req, id);
+  const previous = (await requireOwner(req, id)).voice;
   const parsed = patchSchema.safeParse(await req.json());
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
@@ -47,8 +51,7 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/avatars
   if (body.voicePreset && !presetVoices().some((v) => v.id === body.voicePreset)) {
     throw new HttpError(400, "Unknown voice.");
   }
-  const previous = getAvatar(id)?.voice;
-  const record = updateAvatar(id, (r) => {
+  const record = await updateAvatar(id, (r) => {
     if (body.appearance) r.appearance = body.appearance;
     if (body.persona) r.persona = body.persona;
     if (body.context) r.context = body.context;
@@ -60,5 +63,5 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/avatars
   });
   // Switching to a stock voice frees the old clone (and its ElevenLabs voice slot).
   if (body.voicePreset) freeClone(previous);
-  return Response.json({ avatar: ownerView(record) });
+  return Response.json({ avatar: await ownerView(record) });
 });

@@ -75,14 +75,21 @@ export class Recorder {
 }
 
 /**
+ * The longest voice sample that is kept. Cloning needs 15 to 30 seconds, and
+ * the upload has to fit in one serverless request (4.5 MB): 75 seconds of
+ * 24 kHz mono is 3.6 MB.
+ */
+export const MAX_SAMPLE_SECONDS = 75;
+
+/**
  * Converts any browser-decodable recording (webm/opus, mp4/aac, ...) into a
  * mono 16-bit WAV, the most widely accepted format for voice cloning.
  */
-export async function toWav(blob: Blob, sampleRate = 24000): Promise<{ wav: Blob; seconds: number }> {
+export async function toWav(blob: Blob, sampleRate = 24000, maxSeconds = MAX_SAMPLE_SECONDS): Promise<{ wav: Blob; seconds: number }> {
   const ctx = new AudioContext();
   try {
     const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
-    const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * sampleRate), sampleRate);
+    const offline = new OfflineAudioContext(1, Math.ceil(Math.min(decoded.duration, maxSeconds) * sampleRate), sampleRate);
     const src = offline.createBufferSource();
     src.buffer = decoded;
     src.connect(offline.destination);
@@ -112,7 +119,7 @@ export async function toWav(blob: Blob, sampleRate = 24000): Promise<{ wav: Blob
       const s = Math.max(-1, Math.min(1, pcm[i] * gain));
       view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
     }
-    return { wav: new Blob([buffer], { type: "audio/wav" }), seconds: decoded.duration };
+    return { wav: new Blob([buffer], { type: "audio/wav" }), seconds: rendered.duration };
   } finally {
     ctx.close().catch(() => {});
   }

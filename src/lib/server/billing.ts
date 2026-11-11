@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { isPaidPlan, PLANS, type PaidPlanId, type PlanId } from "@/lib/billing/plans";
 import type { User } from "./auth";
 import { config, HttpError } from "./config";
-import { db } from "./db";
+import { one, transaction } from "./pg";
 import { currentMonth } from "./time";
 
 /**
@@ -36,16 +36,20 @@ export type AccountData = {
   comp?: PaidPlanId;
 };
 
-export function accountOf(userId: string): AccountData {
-  const row = db().prepare("SELECT data FROM users WHERE id = ?").get(userId) as { data: string } | undefined;
-  return row ? (JSON.parse(row.data) as AccountData) : {};
+export async function accountOf(userId: string): Promise<AccountData> {
+  return (await one<{ data: AccountData }>("SELECT data FROM users WHERE id = $1", [userId]))?.data ?? {};
 }
 
-function updateAccount(userId: string, change: (a: AccountData) => void): AccountData {
-  const account = accountOf(userId);
-  change(account);
-  db().prepare("UPDATE users SET data = ? WHERE id = ?").run(JSON.stringify(account), userId);
-  return account;
+/** Changes an account's billing state. The row is locked meanwhile, so concurrent changes don't overwrite each other. */
+function updateAccount(userId: string, change: (a: AccountData) => void): Promise<AccountData> {
+  return transaction(async (tx) => {
+    const [row] = await tx.query<{ data: AccountData }>("SELECT data FROM users WHERE id = $1 FOR UPDATE", [userId]);
+    const account = row?.data ?? {};
+    if (!row) return account;
+    change(account);
+    await tx.query("UPDATE users SET data = $2::jsonb WHERE id = $1", [userId, JSON.stringify(account)]);
+    return account;
+  });
 }
 
 /** Statuses in which a subscription still gives access. Stripe retries failed payments while past_due. */
@@ -53,34 +57,37 @@ const ACTIVE = new Set(["active", "trialing", "past_due"]);
 
 export const hasActiveSubscription = (a: AccountData) => !!a.subscription && ACTIVE.has(a.subscription.status);
 
-export function planOf(user: User | null): PlanId {
-  if (!user) return "free";
+/** The plan an account's state gives the person. */
+function planFrom(user: User, account: AccountData): PlanId {
   if (config.stripe.compEmails.includes(user.email)) return "pro";
-  const account = accountOf(user.id);
   if (account.comp) return account.comp;
   return hasActiveSubscription(account) ? account.subscription!.plan : "free";
 }
 
-export function buildsUsed(userId: string, now = new Date()): number {
-  const b = accountOf(userId).builds;
-  return b?.month === currentMonth(now) ? b.count : 0;
+export async function planOf(user: User | null): Promise<PlanId> {
+  return user ? planFrom(user, await accountOf(user.id)) : "free";
 }
 
-export function countBuild(userId: string, now = new Date()) {
-  const used = buildsUsed(userId, now);
-  updateAccount(userId, (a) => {
-    a.builds = { month: currentMonth(now), count: used + 1 };
+const buildsIn = (account: AccountData, now: Date) => (account.builds?.month === currentMonth(now) ? account.builds.count : 0);
+
+export async function buildsUsed(userId: string, now = new Date()): Promise<number> {
+  return buildsIn(await accountOf(userId), now);
+}
+
+export async function countBuild(userId: string, now = new Date()) {
+  await updateAccount(userId, (a) => {
+    a.builds = { month: currentMonth(now), count: buildsIn(a, now) + 1 };
   });
 }
 
 /** What the account pages show. */
-export function billingView(user: User) {
-  const account = accountOf(user.id);
-  const plan = planOf(user);
+export async function billingView(user: User) {
+  const account = await accountOf(user.id);
+  const plan = planFrom(user, account);
   const sub = hasActiveSubscription(account) ? account.subscription! : null;
   return {
     plan,
-    builds: { used: buildsUsed(user.id), limit: PLANS[plan].builds },
+    builds: { used: buildsIn(account, new Date()), limit: PLANS[plan].builds },
     /** Whether there is a Stripe customer whose billing can be managed. */
     manageable: !!account.stripeCustomerId && !!sub,
     status: sub?.status ?? null,
@@ -142,7 +149,7 @@ function planForPrice(priceId: string | undefined): PaidPlanId | null {
 
 /** Sends the person to Stripe Checkout for a plan. Returns the URL to open. */
 export async function createCheckout(user: User, plan: PaidPlanId): Promise<string> {
-  const account = accountOf(user.id);
+  const account = await accountOf(user.id);
   if (hasActiveSubscription(account)) throw new HttpError(409, "You already have a plan. Use Manage billing to change it.");
   const priceId = config.stripe.prices[plan];
   const session = await stripe<StripeCheckoutSession>("POST", "checkout/sessions", {
@@ -170,10 +177,10 @@ export async function createCheckout(user: User, plan: PaidPlanId): Promise<stri
 }
 
 /** Copies a Stripe subscription's state onto the account. */
-function saveSubscription(userId: string, sub: StripeSubscription) {
+async function saveSubscription(userId: string, sub: StripeSubscription) {
   const item = sub.items?.data?.[0];
   const periodEnd = item?.current_period_end ?? sub.current_period_end;
-  updateAccount(userId, (a) => {
+  await updateAccount(userId, (a) => {
     // The price decides the plan when prices are configured (it changes on an upgrade); otherwise the plan chosen at checkout.
     const plan = planForPrice(item?.price?.id) ?? (isPaidPlan(sub.metadata?.plan) ? sub.metadata.plan : (a.subscription?.plan ?? "creator"));
     a.stripeCustomerId = idOf(sub.customer) ?? a.stripeCustomerId;
@@ -198,13 +205,13 @@ export async function confirmCheckout(user: User, sessionId: string): Promise<Pl
   if (session.client_reference_id !== user.id) throw new HttpError(403, "That checkout belongs to another account.");
   const sub = session.subscription;
   if (session.status !== "complete" || !sub || typeof sub === "string") throw new HttpError(402, "That checkout wasn't completed.");
-  saveSubscription(user.id, sub);
+  await saveSubscription(user.id, sub);
   return planOf(user);
 }
 
 /** A link to Stripe's billing portal (change plan, card, cancel). */
 export async function createPortal(user: User): Promise<string> {
-  const { stripeCustomerId } = accountOf(user.id);
+  const { stripeCustomerId } = await accountOf(user.id);
   if (!stripeCustomerId) throw new HttpError(400, "There is no billing to manage yet.");
   const session = await stripe<{ url: string }>("POST", "billing_portal/sessions", {
     customer: stripeCustomerId,
@@ -229,10 +236,9 @@ export function verifyWebhook(rawBody: string, header: string | null, secret: st
   });
 }
 
-function userIdForCustomer(customerId: string | null): string | null {
+async function userIdForCustomer(customerId: string | null): Promise<string | null> {
   if (!customerId) return null;
-  const row = db().prepare("SELECT id FROM users WHERE json_extract(data, '$.stripeCustomerId') = ?").get(customerId) as { id: string } | undefined;
-  return row?.id ?? null;
+  return (await one<{ id: string }>("SELECT id FROM users WHERE data->>'stripeCustomerId' = $1", [customerId]))?.id ?? null;
 }
 
 type StripeEvent = { type: string; data: { object: Record<string, unknown> } };
@@ -254,10 +260,10 @@ export async function handleWebhookEvent(event: StripeEvent) {
   }
   if (!subscriptionId) return;
   const sub = await stripe<StripeSubscription>("GET", `subscriptions/${subscriptionId}`);
-  userId = userId ?? sub.metadata?.user_id ?? userIdForCustomer(idOf(sub.customer));
-  if (!userId || !db().prepare("SELECT 1 FROM users WHERE id = ?").get(userId)) return;
+  userId = userId ?? sub.metadata?.user_id ?? (await userIdForCustomer(idOf(sub.customer)));
+  if (!userId || !(await one("SELECT 1 FROM users WHERE id = $1", [userId]))) return;
   // An older subscription ending must not overwrite a newer one.
-  const current = accountOf(userId).subscription;
+  const current = (await accountOf(userId)).subscription;
   if (current && current.id !== sub.id && ACTIVE.has(current.status) && !ACTIVE.has(sub.status)) return;
-  saveSubscription(userId, sub);
+  await saveSubscription(userId, sub);
 }

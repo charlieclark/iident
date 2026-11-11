@@ -7,6 +7,7 @@ import type { Appearance } from "@/lib/avatar/options";
 import type { FaceRig, Persona } from "@/lib/avatar/types";
 import type { AvatarSummary, OwnerView } from "@/lib/server/http";
 import type { PaidPlanId, PlanId } from "@/lib/billing/plans";
+import { shrinkImage } from "./image";
 
 export type Avatar = OwnerView;
 export type { AvatarSummary };
@@ -67,7 +68,11 @@ async function request<T>(path: string, init: RequestInit & { token?: string | n
   if (init.body && !(init.body instanceof FormData)) headers.set("content-type", "application/json");
   const res = await fetch(path, { ...init, headers });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError((data as { error?: string }).error ?? `Request failed (${res.status})`, res.status);
+  if (!res.ok) {
+    // A request the platform turns away for its size never reaches the app, so it carries no message of ours.
+    const fallback = res.status === 413 ? "That file is too large to upload." : `Request failed (${res.status})`;
+    throw new ApiError((data as { error?: string }).error ?? fallback, res.status);
+  }
   return data as T;
 }
 
@@ -102,17 +107,17 @@ export const api = {
     body: { appearance?: Appearance; persona?: Persona; context?: AvatarContext; backdrop?: BackdropChoice; consent?: boolean; voicePreset?: string },
   ) => request<{ avatar: Avatar }>(`/api/avatars/${id}`, { method: "PATCH", token, body: JSON.stringify(body) }),
   /** Uses an uploaded picture as the backdrop. */
-  uploadBackdrop: (id: string, token: string, file: Blob) => {
+  uploadBackdrop: async (id: string, token: string, file: Blob) => {
     const form = new FormData();
-    form.set("file", file);
+    form.set("file", await shrinkImage(file, 2000));
     return request<{ avatar: Avatar }>(`/api/avatars/${id}/backdrop`, { method: "POST", token, body: form });
   },
   /** Generates a backdrop scene from a short description. */
   generateBackdrop: (id: string, token: string, prompt: string) =>
     request<{ avatar: Avatar }>(`/api/avatars/${id}/backdrop`, { method: "POST", token, body: JSON.stringify({ prompt }) }),
-  uploadSelfie: (id: string, token: string, file: Blob) => {
+  uploadSelfie: async (id: string, token: string, file: Blob) => {
     const form = new FormData();
-    form.set("file", file, "selfie.jpg");
+    form.set("file", await shrinkImage(file, 1600), "selfie.jpg");
     form.set("consent", "true");
     return request<{ avatar: Avatar }>(`/api/avatars/${id}/selfie`, { method: "POST", token, body: form });
   },

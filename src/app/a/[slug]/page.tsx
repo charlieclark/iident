@@ -11,7 +11,7 @@ export const instant = false;
 
 const loadAvatar = cache(async (slug: string) => {
   await io();
-  const record = getAvatarBySlug(slug);
+  const record = await getAvatarBySlug(slug);
   return record ? publicView(record) : null;
 });
 

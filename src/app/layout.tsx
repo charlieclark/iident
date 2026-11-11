@@ -1,12 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { config } from "@/lib/server/config";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
+  metadataBase: new URL(config.appUrl),
   title: { default: "iident · Your talking 3D avatar", template: "%s · iident" },
   description:
     "Turn a selfie and a voice recording into a talking 3D avatar with your look, your voice and your personality. Share one link; anyone can chat with it.",
