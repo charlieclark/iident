@@ -130,7 +130,7 @@ export async function ownerView(r: AvatarRecord) {
       parentId: c.parentId ?? null,
     })),
     selectedConceptId: r.selectedConceptId ?? null,
-    /** Whether there is a picture of this person that quick sketches can restyle. Until then looks are tried on a mannequin. */
+    /** Whether the first picture of this person is drawn, so a quick preview of a look takes seconds. It is started when the selfie is uploaded. */
     sketchable: !!sketchBase(r),
     model: r.model
       ? {

@@ -111,31 +111,28 @@ The clean portrait is the selfie redrawn by GPT Image 2.6 as the same person str
 
 A written description of the person (from a vision model) is the next thing to try if likeness needs to go further.
 
-## Trying looks on a mannequin
+## Choosing a look: items in slots
 
-The first drawing of a person takes two model calls in a row (the portrait, then the character): 31 to 39 seconds before anything could be tried. Making it faster had run out of road, so it was taken out of the way instead: until there is a character, looks are shown on a mannequin, and the person is drawn once, when they have chosen.
+The creator used to redraw the person after every change, which made choosing slow (about 5 seconds per change, after a first drawing of 31 to 39 seconds). Three replacements were built in a row:
 
-Two ways of dressing the mannequin were built:
+1. **A mannequin dressed by the fast model**, each result shared by all accounts. A look nobody had tried still took 3 to 4 seconds.
+2. **A mannequin dressed in the browser** from ready-made pieces, layered and tinted. Instant, but it previews a dummy, and that was not what was wanted.
+3. **A loadout.** Kept. The items themselves are shown, as cards, and sit in slots once picked; the person is shown wearing the loadout when they ask ("Preview on me").
 
-1. **The fast model dresses it on request** (FLUX.3 klein editing one mannequin picture, with each result shared by all accounts). It worked, but a look nobody had tried still took 3 to 4 seconds, and with 27 colors per garment most color changes were new.
-2. **Ready-made pieces, layered and tinted in the browser.** Kept. Every change shows in 30 to 90 ms, nothing is drawn, and there is no server part at all.
+The item pictures (`scripts/items/build.mjs`):
 
-How the pieces are made (`scripts/doll/build.mjs`):
+- A featureless mannequin in the house style is kept as dark gray on bright green (`scripts/items/base.png`). For each option, Nano Banana 2.1 puts that one item on it in pure white and changes nothing else. It keeps the mannequin in place well: across the 64 drawings the rest of the picture moved by 0.6 to 3.2 percent of the brightness range.
+- The item is whatever is not green, is bright, and is brighter than the mannequin was at that spot (its own highlights are bright too). Cracks left by dark seams are sealed, openings that belong (the lenses of glasses) are kept, specks elsewhere are dropped, and the item's lightness becomes its shading.
+- It is cropped to a square. Hair, beards and accessories also get the matching crop of the mannequin to sit on.
+- In the browser a card is the item's shading multiplied by the chosen color, so one picture serves all 27 colors.
 
-- The mannequin was made from a character in the house style with the person replaced by a featureless figure, so it has the characters' proportions and pose. For cutting, it is kept as dark gray on bright green (`scripts/doll/base.png`).
-- For each option, Nano Banana 2.1 puts that one garment on it in pure white and changes nothing else. It keeps the mannequin in place well: across the 64 pieces the rest of the picture moved by 0.6 to 3.2 percent of the brightness range.
-- The garment is whatever is not green, is bright, and is brighter than the mannequin was at that spot (its own highlights are bright too). Cracks and holes left by dark seams are sealed; openings that belong (the lenses of glasses, a necklace's loop) are kept. The garment's lightness becomes the shading.
-- In the browser, a piece is its shading multiplied by the chosen color. Order is feet up and skin out. A jacket carries a mask of what it hides of the top under it (sleeves that would stick out), and a hat one for hair.
-
-What it cannot show: the person (nothing of them is drawn until they press the button), free-text details, and a build beyond making the figure a little wider or narrower. Pieces don't react to each other: a hood doesn't sit over a jacket's collar, and an afro under a cap is only roughly right. After the first character, sketches are of the person (below).
-
-Measured in the browser: 2.4 s from uploading the photo to a dressed mannequin, 30 to 90 ms per change, then 20 to 24 s from "Create my character" to the character (33 s when pressed within seconds of uploading, because the portrait is still being made).
+Previewing on the person is a restyle of a picture of them (next section), so that picture has to exist. It is drawn in the background from the moment the selfie is uploaded (`src/lib/server/starter.ts`): the portrait, then the character in the look they start with. It takes 36 to 45 seconds, during which the person is picking items, and it appears by itself.
 
 ## Sketches
 
 Drawing straight from the selfie, the fast model (FLUX.3 klein) loses the person in a cartoon style: adults become generic cartoon children, beards disappear, and features named in the prompt (glasses, freckles) get added to people who don't have them. Wording changes and a style reference image did not fix it (the reference's identity leaks in). What works is not asking it to draw the person at all:
 
-1. The first sketch is drawn from the selfie by the main model (about 15 to 20 s, 4 cents).
+1. The first picture (the starter character) is drawn by the main model from the portrait and the selfie, in the background at upload (4 cents).
 2. Every later sketch is the fast model *restyling that picture* with the new look (`buildSketchEditPrompt`): outfit, build, hair and facial hair all change correctly and the face stays, in 4 to 8 s for under a cent.
 3. Once a final exists, sketches restyle the final instead.
 

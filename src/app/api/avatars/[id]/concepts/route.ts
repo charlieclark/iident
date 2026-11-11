@@ -8,6 +8,7 @@ import { updateAvatar } from "@/lib/server/db";
 import { generateCharacterImage } from "@/lib/server/fal";
 import { HttpError, handle, ownerView, rateLimit, requireOwner } from "@/lib/server/http";
 import { ensurePortrait } from "@/lib/server/portrait";
+import { ensureStarter } from "@/lib/server/starter";
 import { download, putFile } from "@/lib/server/storage";
 
 /** Drawing takes 15 to 45 seconds, after a wait for the portrait when the selfie is new. */
@@ -32,9 +33,9 @@ const bodySchema = z.object({
 });
 
 /**
- * Draws the creator as a full-body character in their chosen look: the
- * full-quality render ("final") the 3D model is built from, or, once there
- * is one, a quick sketch ("preview") of a changed look.
+ * Draws the creator as a full-body character in their chosen look: a quick
+ * preview ("preview", about 3 seconds) before committing, or the
+ * full-quality render ("final") the 3D model is built from.
  */
 export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/[id]/concepts">) => {
   const { id } = await ctx.params;
@@ -47,11 +48,12 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
   const record = await requireOwner(req, id);
   if (!record.selfie) throw new HttpError(400, "Upload a selfie first.");
 
-  // A sketch restyles the picture the main model already drew of this person,
-  // which keeps the face. Until there is one, looks are tried on a mannequin
-  // dressed in the browser (src/lib/avatar/doll.ts), so nothing is drawn before the first choice.
-  const base = kind === "preview" ? sketchBase(record) : null;
-  if (kind === "preview" && !base) throw new HttpError(409, "Create your character first.");
+  // A quick preview restyles the picture the main model already drew of this
+  // person, which keeps the face. That first picture is started in the
+  // background when the selfie is uploaded; a preview asked for before it is
+  // done waits for it.
+  const base = kind === "preview" ? (sketchBase(record) ?? (await ensureStarter(id))) : null;
+  if (kind === "preview" && !base) throw new HttpError(502, "We couldn't draw you just now. Try again in a moment.");
   // Drawn from the selfie's clean portrait and the selfie together; from the selfie alone if the portrait could not be made.
   const portrait = base ? null : await ensurePortrait(id);
   const prompt = base ? buildSketchEditPrompt(appearance) : buildConceptPrompt(appearance, { portrait: !!portrait });
