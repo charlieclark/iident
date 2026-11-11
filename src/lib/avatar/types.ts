@@ -161,7 +161,17 @@ export type AvatarRecord = {
   createdAt: number;
   updatedAt: number;
   consent: boolean;
-  selfie?: { file: string; url: string };
+  selfie?: {
+    file: string;
+    url: string;
+    /**
+     * The selfie redrawn as a straight-on, evenly lit portrait with a
+     * relaxed face. Characters are drawn from it together with the selfie,
+     * so a photo taken from below, in bad light or mid-frown doesn't end up
+     * in the character.
+     */
+    portrait?: { file: string; url: string };
+  };
   appearance: Appearance;
   concepts: Concept[];
   selectedConceptId?: string;

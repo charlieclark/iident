@@ -363,22 +363,40 @@ export function describeOutfit(a: Appearance): string {
  * the pose/framing block was tuned so the result converts cleanly to 3D and
  * rigs well; change it carefully.
  */
-export function buildConceptPrompt(a: Appearance): string {
+export function buildConceptPrompt(a: Appearance, source: { portrait?: boolean } = {}): string {
   // Naming the features to carry over keeps the person recognizable; asking
   // for them to be translated into the style, not copied, keeps a realistic
   // face from being pasted onto a stylized body.
   const hair = a.hair.keep
     ? "hairline, hairstyle, hair color and any facial hair"
     : "and any facial hair";
+  const photos = source.portrait
+    ? "these two photos (the first is a corrected straight-on portrait of them, the second their original selfie)"
+    : "this photo";
   const lines = [
-    `Turn the person in this photo into a full-body 3D character in the style of ${HOUSE_STYLE}.`,
+    `Turn the person in ${photos} into a full-body 3D character in the style of ${HOUSE_STYLE}.`,
     "The whole character, the face included, is drawn in that one style: no photographic or realistic face.",
     `Keep them recognizable as this exact person the way a good character designer would: carry their face shape, jawline, nose, eye shape and spacing, eyebrows, lips, skin tone, ${hair} over into the style, keep what is distinctive about them, and keep glasses, moles, freckles and piercings if they have them. Keep their apparent age.`,
+    // Without this the model tidies people up: fuller, darker hair, heavier
+    // brows, and whatever expression the photo happened to catch.
+    `Match their real ${a.hair.keep ? "hair length, hairline, hair color and " : ""}eyebrow weight exactly: do not make ${a.hair.keep ? "the hair thicker, darker or fuller" : "the eyebrows heavier or darker"} than it is, and do not copy any passing expression from the photo.`,
     PROPORTIONS,
   ];
   lines.push(...describeLook(a), POSE_AND_FRAMING);
   return lines.join(" ");
 }
+
+/**
+ * Prompt for the clean portrait made from a selfie before anything is drawn
+ * from it. Real selfies are taken from below, against a window, mid-frown;
+ * a cartoon drawn straight from one inherits all of that. The portrait is
+ * the same person seen properly, and stays photographic on purpose: it is a
+ * reference, never shown as the character.
+ */
+export const PORTRAIT_PROMPT =
+  "Make a photorealistic head-and-shoulders portrait of the person in this photo, as a reference picture of what they really look like. " +
+  "It must be unmistakably the same real person: keep their exact face shape, jawline, nose, eyes, eyebrows, lips, ears, skin tone, hairline, hairstyle, hair length, hair color and any facial hair, and details such as glasses, moles and freckles. Keep their real age. Do not beautify, smooth, slim or stylize anything. " +
+  "The photo may be taken from an odd angle, in poor light or with a passing expression. Correct for all three: show them straight on at eye level with the head upright, in flat even studio lighting on a plain white background, and with a relaxed, friendly resting face: brow smooth and unfurrowed, eyes open normally and looking at the camera, lips gently closed in the faintest smile.";
 
 /** The parts of a look that are described the same way wherever they are drawn. */
 function describeLook(a: Appearance): string[] {
@@ -414,7 +432,7 @@ export function buildSketchEditPrompt(a: Appearance): string {
 
 const POSE_AND_FRAMING =
   "Pose: neutral A-pose, standing straight, facing the camera, arms straight and angled about 30 degrees away from the body, palms facing the thighs, empty hands, feet slightly apart. " +
-  "Expression: relaxed and neutral with lips gently closed, eyes open looking at the camera. " +
+  "Expression: relaxed and friendly with an unfurrowed brow, lips gently closed in the faintest smile, eyes open looking at the camera. " +
   "Full figure visible from head to shoes, centered, orthographic front view, flat even studio lighting, plain pure white background, no props, no text, no floor shadow.";
 
 /**

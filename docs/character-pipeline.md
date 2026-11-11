@@ -95,6 +95,22 @@ The look the product started with, an animated film character with natural propo
 
 The lesson for next time: the likeness score is a guide for comparing models inside one style, not a target. Chasing it leads to realism, and realism is what looked wrong.
 
+## Real selfies: the clean portrait
+
+Every test above used synthetic selfies that were straight on, evenly lit and relaxed. The first real selfie was taken from below, against a window, with a furrowed brow, and the character came out sad-eyed with a generic face and much thicker hair. Six fixes were tried on that selfie:
+
+| | Result |
+| --- | --- |
+| Tell the cartoon model to correct for angle, light and expression | Better hairline, still a sad face |
+| A clean portrait first, then the cartoon model | Neutral face, still generic |
+| **A clean portrait and the selfie together, then the cartoon model** | **Chosen.** Neutral, friendly, the most like the person while staying a cartoon |
+| The same plus a written description of what is distinctive | Picks up hairline, brows and ears; reads as a caricature, and a loose word in the description shows (a "reddish" beard came out orange) |
+| The likeness model shown the style by example | Most like the person, but back toward a real face |
+
+The clean portrait is the selfie redrawn by GPT Image 2.6 as the same person straight on at eye level, in even light, with a relaxed face (`PORTRAIT_PROMPT`). It is the one step where a photographic result is right, because it is a reference and never the character. It is made once per selfie, in the background at upload (`src/lib/server/portrait.ts`), and the character prompt now also tells the model not to thicken or darken hair and brows, and not to copy a passing expression.
+
+A written description of the person (from a vision model) is the next thing to try if likeness needs to go further.
+
 ## Sketches
 
 Drawing straight from the selfie, the fast model (FLUX.3 klein) loses the person in a cartoon style: adults become generic cartoon children, beards disappear, and features named in the prompt (glasses, freckles) get added to people who don't have them. Wording changes and a style reference image did not fix it (the reference's identity leaks in). What works is not asking it to draw the person at all:
@@ -109,5 +125,5 @@ Only pictures the main model drew of the current selfie in the current style are
 
 - Real selfies of real people in poor light or at odd angles.
 - Likeness after the 3D step (one build per style was checked by eye, not scored).
-- The current style on more than five faces, and its sketches on real selfies.
+- The current style on more than five synthetic faces and one real selfie, and its sketches on real selfies.
 - Passing a tight face crop as a second reference image, which may help further.

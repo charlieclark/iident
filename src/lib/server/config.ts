@@ -105,6 +105,12 @@ export const config = {
      * into a near-photographic face (docs/character-pipeline.md).
      */
     concept: env("FAL_CONCEPT_MODEL", "google/nano-banana-2.1/edit")!,
+    /**
+     * Selfie -> a clean straight-on portrait of the same person, which
+     * characters are then drawn from. This step needs likeness above all,
+     * which is what GPT Image 2.6 is best at; it never draws the character.
+     */
+    portrait: env("FAL_PORTRAIT_MODEL", "openai/gpt-image-2.6/flare/edit")!,
     /** Quality settings, for image models that have them (GPT Image). */
     conceptQuality: env("CONCEPT_QUALITY", "high")!,
     /** The first sketch is drawn from the selfie by the main model, at this quality where it applies. */

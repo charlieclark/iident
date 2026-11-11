@@ -7,6 +7,7 @@ import { config } from "@/lib/server/config";
 import { updateAvatar } from "@/lib/server/db";
 import { generateCharacterImage } from "@/lib/server/fal";
 import { HttpError, handle, ownerView, rateLimit, requireOwner } from "@/lib/server/http";
+import { ensurePortrait } from "@/lib/server/portrait";
 import { download, putFile } from "@/lib/server/storage";
 
 const bodySchema = z.object({
@@ -34,12 +35,14 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
   // which keeps the face. Until there is one, the main model draws the first
   // sketch itself, at a lower quality.
   const base = kind === "preview" ? sketchBase(record) : null;
-  const prompt = base ? buildSketchEditPrompt(appearance) : buildConceptPrompt(appearance);
+  // Drawn from the selfie's clean portrait and the selfie together; from the selfie alone if the portrait could not be made.
+  const portrait = base ? null : await ensurePortrait(id);
+  const prompt = base ? buildSketchEditPrompt(appearance) : buildConceptPrompt(appearance, { portrait: !!portrait });
   const url = base
     ? await generateCharacterImage({ engine: "sketch", imageUrls: [base.url], prompt })
     : await generateCharacterImage({
         engine: "main",
-        imageUrls: [record.selfie.url],
+        imageUrls: portrait ? [portrait, record.selfie.url] : [record.selfie.url],
         prompt,
         quality: kind === "preview" ? config.models.firstSketchQuality : undefined,
       });
