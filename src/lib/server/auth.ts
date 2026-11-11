@@ -48,6 +48,8 @@ export const userById = async (id: string) => toUser(await one<UserRow>("SELECT 
 /** Starts a session and returns the cookie to set. */
 export async function startSession(userId: string, now = Date.now()): Promise<string> {
   const token = randomBytes(32).toString("base64url");
+  // Sessions that ran out are cleared whenever a new one starts, so the table doesn't grow for ever.
+  await query("DELETE FROM sessions WHERE expires_at < $1", [now]);
   await query("INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES ($1, $2, $3, $4)", [hashToken(token), userId, now, now + SESSION_TTL]);
   return sessionCookie(token, SESSION_TTL / 1000);
 }
