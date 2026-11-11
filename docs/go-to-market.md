@@ -86,7 +86,7 @@ What works now:
 
 What still gets in the way, in order of impact:
 
-1. ~~No accounts.~~ Done: sign in by email link; a reminder to save appears once there is a final character. Not yet required at any step.
+1. ~~No accounts.~~ Done: an account (email link) is now required before the creator opens, so nothing is made that isn't saved, and every free character has an email address behind it.
 2. **The persona step is a long form.** Two fixes: draft it from two or three short answers, and, inside Liinks, fill it from the page (name, bio, links become the avatar's knowledge and cards with no typing).
 3. **Nothing to show for the free part.** Let people download or share their final character image before paying. It is the cheapest marketing available.
 4. **The 6-minute build has no notification.** If they close the tab they don't know it finished. Needs accounts (email) or a browser notification.

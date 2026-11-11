@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import sharp from "sharp";
 import { z } from "zod";
 import { appearanceSchema, buildConceptPrompt, buildSketchEditPrompt, STYLE_ID } from "@/lib/avatar/options";
 import type { Concept } from "@/lib/avatar/types";
@@ -12,6 +13,19 @@ import { download, putFile } from "@/lib/server/storage";
 
 /** Drawing takes 15 to 45 seconds, after a wait for the portrait when the selfie is new. */
 export const maxDuration = 300;
+
+/**
+ * A sketch comes back inside the response, as a small JPEG, so the page can
+ * show it at once instead of asking for the stored file in a second request.
+ */
+async function inlinePicture(image: Buffer): Promise<string | undefined> {
+  try {
+    const jpeg = await sharp(image).resize({ height: 1024, withoutEnlargement: true }).flatten({ background: "#ffffff" }).jpeg({ quality: 82 }).toBuffer();
+    return `data:image/jpeg;base64,${jpeg.toString("base64")}`;
+  } catch {
+    return undefined; // the page falls back to the stored file
+  }
+}
 
 const bodySchema = z.object({
   appearance: appearanceSchema,
@@ -29,7 +43,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
   if (!parsed.success) throw new HttpError(400, "Invalid appearance options.");
   const { appearance, kind } = parsed.data;
   // Sketches cost about a cent and redraw as the look changes, so they get a higher per-minute allowance.
-  if (kind === "preview") await rateLimit(req, "preview", 20);
+  if (kind === "preview") await rateLimit(req, "preview", 40);
   else await rateLimit(req, "generate", 12);
   const record = await requireOwner(req, id);
   if (!record.selfie) throw new HttpError(400, "Upload a selfie first.");
@@ -50,7 +64,8 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
         quality: kind === "preview" ? config.models.firstSketchQuality : undefined,
       });
   const cid = randomBytes(6).toString("base64url");
-  const file = await putFile(id, `concept-${cid}.png`, await download(url));
+  const image = await download(url);
+  const file = await putFile(id, `concept-${cid}.${base ? "jpg" : "png"}`, image);
   const concept: Concept = {
     id: cid,
     url,
@@ -68,5 +83,5 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
     // The picture sketches are made from must outlive the sketches made from it.
     r.concepts = withConcept(r.concepts, concept, sketchBase({ concepts: [concept, ...r.concepts], selfie: r.selfie }));
   });
-  return Response.json({ avatar: await ownerView(updated), created: [cid] });
+  return Response.json({ avatar: await ownerView(updated), created: [cid], ...(kind === "preview" ? { inline: await inlinePicture(image) } : {}) });
 });

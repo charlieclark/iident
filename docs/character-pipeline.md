@@ -107,7 +107,7 @@ Every test above used synthetic selfies that were straight on, evenly lit and re
 | The same plus a written description of what is distinctive | Picks up hairline, brows and ears; reads as a caricature, and a loose word in the description shows (a "reddish" beard came out orange) |
 | The likeness model shown the style by example | Most like the person, but back toward a real face |
 
-The clean portrait is the selfie redrawn by GPT Image 2.6 as the same person straight on at eye level, in even light, with a relaxed face (`PORTRAIT_PROMPT`). It is the one step where a photographic result is right, because it is a reference and never the character. It is made once per selfie, in the background at upload (`src/lib/server/portrait.ts`), and the character prompt now also tells the model not to thicken or darken hair and brows, and not to copy a passing expression.
+The clean portrait is the selfie redrawn by GPT Image 2.6 as the same person straight on at eye level, in even light, with a relaxed face (`PORTRAIT_PROMPT`). It is the one step where a photographic result is right, because it is a reference and never the character. It is made once per selfie, in the background at upload (`src/lib/server/portrait.ts`), at medium quality: on the six test faces that took a median of 10.7 s against 17.0 s at high, with the same likeness to the selfie (0.848 against 0.848, worst case 0.80 against 0.82) and no difference to the eye, and the first drawing waits for it. Also, the character prompt now also tells the model not to thicken or darken hair and brows, and not to copy a passing expression.
 
 A written description of the person (from a vision model) is the next thing to try if likeness needs to go further.
 

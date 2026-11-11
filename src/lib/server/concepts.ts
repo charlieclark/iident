@@ -1,8 +1,8 @@
 import { STYLE_ID } from "@/lib/avatar/options";
 import type { AvatarRecord, Concept } from "@/lib/avatar/types";
 
-/** Drafts are cheap and replace each other quickly, so only a few are kept. */
-const KEEP = { preview: 6, final: 18 };
+/** Drafts are cheap and replace each other quickly, so only the latest are kept: enough to go back to a look tried a moment ago. */
+const KEEP = { preview: 12, final: 18 };
 
 /**
  * The picture quick sketches are edits of: the newest one the main model

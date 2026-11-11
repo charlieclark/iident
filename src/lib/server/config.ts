@@ -125,6 +125,12 @@ export const config = {
      * which is what GPT Image 2.6 is best at; it never draws the character.
      */
     portrait: env("FAL_PORTRAIT_MODEL", "openai/gpt-image-2.6/flare/edit")!,
+    /**
+     * The portrait is what the first drawing waits for. At "medium" it takes
+     * about 11 s instead of 17 s, with the same likeness on six test faces
+     * (0.848 against 0.848) and no difference to the eye.
+     */
+    portraitQuality: env("PORTRAIT_QUALITY", "medium")!,
     /** Quality settings, for image models that have them (GPT Image). */
     conceptQuality: env("CONCEPT_QUALITY", "high")!,
     /** The first sketch is drawn from the selfie by the main model, at this quality where it applies. */

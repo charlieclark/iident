@@ -9,11 +9,12 @@ const concept = (id: string, kind?: "preview" | "final"): Concept => ({ id, url:
 describe("character concepts", () => {
   it("keeps only the newest few drafts and never drops finals for them", () => {
     let list: Concept[] = [concept("old-final"), concept("f1", "final")];
-    for (let i = 0; i < 10; i++) list = withConcept(list, concept(`p${i}`, "preview"));
-    expect(list.filter((c) => c.kind === "preview").map((c) => c.id)).toEqual(["p9", "p8", "p7", "p6", "p5", "p4"]);
+    for (let i = 0; i < 16; i++) list = withConcept(list, concept(`p${i}`, "preview"));
+    // Twelve are kept: enough to go back to a look tried a moment ago.
+    expect(list.filter((c) => c.kind === "preview").map((c) => c.id)).toEqual(Array.from({ length: 12 }, (_, i) => `p${15 - i}`));
     // Concepts from before drafts existed have no kind and count as final.
     expect(list.filter((c) => c.kind !== "preview").map((c) => c.id)).toEqual(["old-final", "f1"]);
-    expect(list[0].id).toBe("p9");
+    expect(list[0].id).toBe("p15");
   });
 
   it("sketches from the newest picture the main model drew of the current selfie in the current style", () => {
@@ -28,11 +29,11 @@ describe("character concepts", () => {
 
     // The picture sketches are made from survives however many sketches follow it.
     let list: Concept[] = [main("first", { kind: "preview" })];
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 16; i++) {
       const next = main(`s${i}`, { drawnBy: "sketch", kind: "preview" });
       list = withConcept(list, next, sketchBase({ concepts: [next, ...list], selfie }));
     }
-    expect(list.map((c) => c.id)).toEqual(["s9", "s8", "s7", "s6", "s5", "s4", "first"]);
+    expect(list.map((c) => c.id)).toEqual([...Array.from({ length: 12 }, (_, i) => `s${15 - i}`), "first"]);
   });
 
   it("shapes requests for each image model family", () => {

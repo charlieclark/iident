@@ -1,9 +1,8 @@
 import { after } from "next/server";
 import { z } from "zod";
 import { heightMeters } from "@/lib/avatar/options";
-import { PLANS } from "@/lib/billing/plans";
 import { sessionUser } from "@/lib/server/auth";
-import { billingEnabled, buildsUsed, countBuild, planOf } from "@/lib/server/billing";
+import { buildNeedsPayment, countBuild, requireBuildAllowance } from "@/lib/server/billing";
 import { requireFal } from "@/lib/server/config";
 import { claimAvatar } from "@/lib/server/db";
 import { HttpError, handle, ownerView, rateLimit, requireOwner } from "@/lib/server/http";
@@ -28,8 +27,14 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
   if (concept.kind === "preview") throw new HttpError(400, "Create your final character first.");
   if (isBuilding(record.model)) throw new HttpError(409, "Your character is already being built.");
 
-  // The 3D build is the expensive step, so it is what a plan pays for.
-  const payer = billingEnabled() ? await requireBuildAllowance(req, id, record.model?.status === "failed") : null;
+  // The 3D build is the expensive step, so it is what a plan pays for: it never starts before payment.
+  let payer: string | null = null;
+  if (buildNeedsPayment()) {
+    const user = await sessionUser(req);
+    if (!user) throw new HttpError(401, "Sign in to bring your character to life in 3D.");
+    if (!(await claimAvatar(id, user.id))) throw new HttpError(403, "This avatar belongs to another account.");
+    payer = await requireBuildAllowance(user, record.model?.status === "failed");
+  }
 
   // Submits the first step to the 3D service; the rest follows as it is polled (see jobs.ts).
   const { record: started, finish } = await startModelJob(id, parsed.data.conceptId, heightMeters(record.appearance.height));
@@ -37,21 +42,3 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
   if (finish) after(finish);
   return Response.json({ avatar: await ownerView(started) });
 });
-
-/**
- * Checks that the signed-in account may start a build, and attaches the
- * avatar to it. Returns the account to count the build against, or null
- * when the build is free: a retry after a failed build isn't charged twice.
- */
-async function requireBuildAllowance(req: Request, avatarId: string, retry: boolean): Promise<string | null> {
-  const user = await sessionUser(req);
-  if (!user) throw new HttpError(401, "Sign in to bring your character to life in 3D.");
-  if (!(await claimAvatar(avatarId, user.id))) throw new HttpError(403, "This avatar belongs to another account.");
-  const plan = PLANS[await planOf(user)];
-  if (!plan.builds) throw new HttpError(402, "Bringing your character to life in 3D is part of the Creator plan.");
-  if (retry) return null;
-  if ((await buildsUsed(user.id)) >= plan.builds) {
-    throw new HttpError(402, `You've used all ${plan.builds} of this month's 3D builds on the ${plan.name} plan. They reset next month.`);
-  }
-  return user.id;
-}

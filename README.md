@@ -15,10 +15,12 @@ context ───────┘                     └──► show_items(ids
 
 ## How it works
 
+**0. An account.** Creating starts with an account: a visitor who clicks "Create your avatar" is asked for their email, opens the link they are sent, and lands in the creator. Everything they make is saved to the account from the first step.
+
 **1. Photo.** The selfie is checked on-device with MediaPipe Face Landmarker (one clear, front-facing, well-lit face) before it is uploaded.
 
-**2. Look.** Every character shares one house style: an animated film character with natural proportions, the face drawn in the same style as the body (`HOUSE_STYLE` in `src/lib/avatar/options.ts`). The creator picks build, height, hair, facial hair, an outfit (presets plus per-piece type and color), accessories and free-text details, and these compile into one prompt that keeps the person recognizable in the style and asks for an A-pose, closed mouth, flat lighting, plain background and empty hands. Those constraints are what make the next steps reliable. Before anything is drawn, the selfie is turned into a clean portrait: the same person straight on, evenly lit, with a relaxed face (GPT Image 2.6, about 4 cents, started in the background as soon as the selfie is uploaded). Characters are drawn from that portrait and the selfie together, so a photo taken from below, against a window or mid-frown doesn't end up in the character. The portrait is a private reference and is never shown as the character. Two more image models share the drawing:
-- **Sketches**: the first is drawn from the selfie by the final model (15 to 20 seconds, 4 cents). Every later one is FLUX.3 klein restyling that picture with the new look (4 to 8 seconds, under a cent), a moment after every change, so trying outfits feels live and the face stays the same. Asked to draw the person from the selfie itself, the fast model loses them in this style.
+**2. Look.** Every character shares one house style: an animated film character with natural proportions, the face drawn in the same style as the body (`HOUSE_STYLE` in `src/lib/avatar/options.ts`). The creator picks build, height, hair, facial hair, an outfit (presets plus per-piece type and color), accessories and free-text details, and these compile into one prompt that keeps the person recognizable in the style and asks for an A-pose, closed mouth, flat lighting, plain background and empty hands. Those constraints are what make the next steps reliable. Before anything is drawn, the selfie is turned into a clean portrait: the same person straight on, evenly lit, with a relaxed face (GPT Image 2.6 at medium quality, about 11 seconds, started in the background as soon as the selfie is uploaded). Characters are drawn from that portrait and the selfie together, so a photo taken from below, against a window or mid-frown doesn't end up in the character. The portrait is a private reference and is never shown as the character. Two more image models share the drawing:
+- **Sketches**: the first is drawn by the final model once the portrait is ready (about half a minute in all, 4 cents); what the creator picks during that wait is applied right after it, without starting over. Every later one is FLUX.3 klein restyling that picture with the new look (about 3 seconds from tap to picture, under a cent), so trying outfits feels live and the face stays the same. The picture stays on screen while the options change (pinned under the header on a phone), a sketch arrives inside the response as a small JPEG so there is no second request, and going back to a look already tried shows it at once. Asked to draw the person from the selfie itself, the fast model loses them in this style.
 - **The final character** (Nano Banana 2.1, about 4 cents, about 15 seconds): drawn once the creator is happy, and can be refined in plain words ("make the sneakers red") with the selfie kept alongside so the face stays true. The 3D model is only built from a final.
 
 The models and style were chosen in a measured bake-off: see [docs/character-pipeline.md](docs/character-pipeline.md).
@@ -46,8 +48,9 @@ Measured while building this, using the default models:
 
 | Step | Time |
 | --- | --- |
-| First sketch (Nano Banana 2.1) | 15 to 20 s |
-| Sketch of a changed look (FLUX.3 klein) | 4 to 8 s end to end |
+| First sketch, portrait included (GPT Image 2.6, then Nano Banana 2.1) | 30 to 40 s |
+| Sketch of a changed look (FLUX.3 klein), tap to picture in the browser | about 3 s (first one after the drawing: 5 to 7 s) |
+| A look already tried | instant |
 | Final character (Nano Banana 2.1) | about 15 s |
 | 3D mesh + rig + 8 clips (Meshy) | 3 to 13 min, depending on queue load |
 | Speech-to-text (Whisper) | about 2.5 s |
@@ -136,11 +139,11 @@ Speech uses ElevenLabs whenever `ELEVENLABS_API_KEY` is set. `ELEVENLABS_MODEL` 
 
 ## Plans and payments
 
-Plans live in `src/lib/billing/plans.ts` (Free, Creator at $10 a month, Pro at $29) and everything about Stripe in `src/lib/server/billing.ts`. Billing is on only when `STRIPE_SECRET_KEY` is set; without it nothing is paywalled and `MONTHLY_REPLY_LIMIT` applies to every avatar.
+Plans live in `src/lib/billing/plans.ts` (Free, Creator at $10 a month, Pro at $29) and everything about Stripe in `src/lib/server/billing.ts`. Billing is on only when `STRIPE_SECRET_KEY` is set. Without it, publishing isn't paywalled and `MONTHLY_REPLY_LIMIT` applies to every avatar. The 3D build is different: it costs a couple of dollars, so it never starts before payment. A development server with billing off builds for free; a production one (`NODE_ENV=production`) refuses to build until payments are set up, except for accounts in `COMP_EMAILS`.
 
 With billing on:
 
-- Designing a character is free. Building it in 3D and publishing it need an account with a plan; the creator sends people to `/pricing`, through sign-in and Stripe Checkout, and back to the avatar they were working on.
+- Designing a character is free with an account. Building it in 3D and publishing it need a plan; the build button sends people to `/pricing`, through Stripe Checkout, and back to their avatar, where the build they paid for starts by itself.
 - A plan sets how many avatars can be live, how many replies each gives visitors a month, and how many 3D builds the account gets a month. Retrying a failed build isn't counted.
 - The plan is recorded when the person returns from checkout (the session is read back from Stripe), so it is active at once. The webhook keeps it in step afterwards: renewals, plan changes in the billing portal, failed payments, cancellations.
 - When a plan ends, avatars are kept. Their pages stay up and answer with a short "taking a break" line, with no model call or speech, until the account has a plan again.
@@ -153,7 +156,7 @@ Setting up Stripe: set `STRIPE_SECRET_KEY`; add a webhook endpoint at `/api/bill
 - A cloned voice is the easiest part of an avatar to misuse for impersonation, so cloning has an off switch (`VOICE_CLONING=off`): recordings are then refused, clones made earlier are never spoken, and avatars use stock voices. The persona prompt always tells the model whether it speaks with the person's own voice or a stock voice, so it never claims a stock voice is theirs.
 - The public page labels the avatar as an AI, and the persona prompt requires it to say so when asked, avoid commitments on the person's behalf, stick to the facts the creator provided and never share private contact, financial or health details.
 - Selfies, their clean portraits, voice samples and concept images are only served to the owner; the public page only exposes the 3D model and a thumbnail.
-- An avatar can be edited by the browser that created it (a random edit token kept in that browser) and by the account it belongs to. Accounts sign in with a one-time email link (20 minutes, single use, 5 an hour per address) that starts a 60-day session in an httpOnly, SameSite=Lax cookie. Only hashes of edit tokens, link tokens and session tokens are stored. An avatar that belongs to an account can't be claimed by another one.
+- An avatar belongs to the account that created it, and can be edited by that account and by the browser that made it (a random edit token kept in that browser, also used in its private file links). Accounts sign in with a one-time email link (20 minutes, single use, 5 an hour per address) that starts a 60-day session in an httpOnly, SameSite=Lax cookie. Only hashes of edit tokens, link tokens and session tokens are stored. An avatar that belongs to an account can't be claimed by another one.
 - Per-IP rate limits (counted in the database, with the addresses hashed) protect the expensive endpoints, and each avatar has a monthly cap on replies to visitors (`MONTHLY_REPLY_LIMIT`, default 300): past it, the avatar answers in text only until the next month.
 
 ## Production notes
@@ -162,7 +165,7 @@ Setting up Stripe: set `STRIPE_SECRET_KEY`; add a webhook endpoint at `/api/bill
 - **Long-running work.** A 3D build takes 4 to 13 minutes, so nothing waits for it. The two slow steps run in fal's queue and the avatar's record keeps their request ids; the build moves on one step at a time whenever the creator's page polls or fal calls back (`src/lib/server/jobs.ts`). Any server instance can pick it up, and a step is never submitted twice.
 - **Storage and database.** `src/lib/server/storage.ts` (Vercel Blob, or local disk in development) and `src/lib/server/db.ts` with `pg.ts` (Postgres) are small, isolated modules. Rate limits live in Postgres too, so they hold across instances.
 - **Accounts.** Sign-in emails go through Resend (`RESEND_API_KEY`, `EMAIL_FROM` on a domain verified there). Without a key, development shows the sign-in link on the page and production refuses to sign anyone in. Set `NEXT_PUBLIC_APP_URL` to the public https address: sign-in links are built from it and the session cookie is marked Secure when it is https.
-- **Costs.** Each avatar uses a clean portrait of the selfie at about 4 cents, a first sketch at about 4 cents, later sketches at under a cent each, one or two final renders at about 4 cents, one image-to-3D run, one rigging run and one voice clone; each reply uses one Claude call (two in the rare case it shows cards before saying anything) and one TTS call per sentence.
+- **Costs.** Each avatar uses a clean portrait of the selfie at up to 4 cents, a first sketch at about 4 cents, later sketches at under a cent each, one or two final renders at about 4 cents, one image-to-3D run, one rigging run and one voice clone; each reply uses one Claude call (two in the rare case it shows cards before saying anything) and one TTS call per sentence.
 - **Voice cloning at scale.** With `FISH_API_KEY` set, cloned voices are spoken by Fish Audio straight from the creator's recording, which goes with each request, so there is no voice limit and nothing to clean up at Fish. Saved Fish voice models (`FISH_VOICE_MODE=model`) skip re-sending the recording, but Fish caps how many the API can create by prepaid credit (an account with no credit can create none). Fish concurrency also depends on prepaid credit: 5 requests under $100, 15 from $100, 50 from $1,000. Clones made with ElevenLabs instead each take a voice slot for as long as the avatar exists (30 on Creator, 160 on Pro, 660 on Scale, 2,200 on Business, per ElevenLabs' pricing page in November 2026) and count against a monthly quota of new voices (95 on Creator). Stock voices use no slots, and re-recording or switching to a stock voice frees the old clone.
 
 Costs, pricing options and what a new user still trips over are written up in [docs/go-to-market.md](docs/go-to-market.md).
