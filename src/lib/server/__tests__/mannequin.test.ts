@@ -53,9 +53,9 @@ describe("looks on the mannequin", () => {
   it("files looks by what the mannequin can show", () => {
     const key = mannequin.mannequinKey;
     const base = look();
-    // The mannequin has no face, no height and no hair of its own.
+    // The mannequin has no height, and no hair or beard of its own: "as in the photo" and clean-shaven show nothing.
     expect(key(look({ height: "tall" }))).toBe(key(base));
-    expect(key(look({ facialHair: "full-beard" }))).toBe(key(base));
+    expect(key(look({ facialHair: "none" }))).toBe(key(base));
     expect(key(look({ hair: { keep: true, style: "long-wavy", color: "blonde" } }))).toBe(key(base));
     // A layer that isn't worn has no color, and the order accessories were picked in doesn't matter.
     expect(key(look({ outer: { type: "none", color: "red" } }))).toBe(key(look({ outer: { type: "none", color: "black" } })));
@@ -66,6 +66,7 @@ describe("looks on the mannequin", () => {
       look({ shoes: { type: "boots", color: "white" } }),
       look({ accessories: ["cap"] }),
       look({ build: "athletic" }),
+      look({ facialHair: "full-beard" }),
       look({ hair: { keep: false, style: "long-wavy", color: "blonde" } }),
       look({ extras: "a small enamel cat pin" }),
     ]) {
@@ -81,5 +82,7 @@ describe("looks on the mannequin", () => {
     expect(prompt).toMatch(/no logos, brand marks or lettering/);
     // Nothing about the person: no face, no age, no selfie.
     expect(prompt).not.toMatch(/person|selfie|Facial hair|Expression/i);
+    // A beard that was picked is put on the mannequin.
+    expect(buildMannequinPrompt(look({ facialHair: "short-beard" }))).toMatch(/Facial hair: a short neat beard\./);
   });
 });

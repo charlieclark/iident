@@ -433,15 +433,18 @@ export function buildSketchEditPrompt(a: Appearance): string {
 /**
  * What a look comes down to on the mannequin outfits are tried on before the
  * person has a character of their own. The mannequin has no face, no hair of
- * its own and no height, so two looks that differ only in those are the same
- * picture: the parts listed here are both what is drawn and what the shared
- * picture is filed under.
+ * its own and no height, so "as in the photo" has nothing to show and two
+ * looks that differ only in those are the same picture. A hairstyle or a
+ * beard that was picked is shown. The parts listed here are both what is
+ * drawn and what the shared picture is filed under.
  */
 export function mannequinLook(a: Appearance): string[] {
   const lines: string[] = [];
   if (!a.hair.keep) {
     lines.push(`Hair: give it ${fixArticles(find(HAIR_STYLES, a.hair.style).prompt.replace("{c}", find(HAIR_COLORS, a.hair.color).name))}.`);
   }
+  // Clean-shaven is what the blank head already is.
+  if (a.facialHair !== "keep" && a.facialHair !== "none") lines.push(`Facial hair: ${find(FACIAL_HAIR, a.facialHair).prompt}.`);
   if (a.build !== "average") lines.push(`Body type: ${find(BUILDS, a.build).prompt}.`);
   lines.push(`Outfit: ${describeOutfit(a)}.`);
   if (a.accessories.length) {
