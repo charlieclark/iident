@@ -42,7 +42,7 @@ export function SignInForm() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4 py-10">
-      <Link href="/" aria-label="iident home" className="mb-8 self-center">
+      <Link href="/" aria-label="Twiins home" className="mb-8 self-center">
         <Logo />
       </Link>
       <Card className="p-6 sm:p-8">
@@ -70,7 +70,7 @@ export function SignInForm() {
           </div>
         ) : (
           <form onSubmit={submit}>
-            <h1 className="text-2xl font-semibold tracking-tight text-ink-900">{starting ? "Create your account to start" : "Sign in to iident"}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-ink-900">{starting ? "Create your account to start" : "Sign in to Twiins"}</h1>
             <p className="mt-2 text-sm text-ink-600">
               {starting
                 ? "Your avatar is saved to your account as you make it. Enter your email and we'll send you a link: no password. Already have an account? The same link signs you in."
@@ -98,7 +98,17 @@ export function SignInForm() {
             <Button type="submit" size="lg" className="mt-5 w-full" loading={busy}>
               {starting ? "Email me a link to start" : "Email me a sign-in link"}
             </Button>
-            <p className="mt-4 text-xs text-ink-500">Avatars you&apos;ve started in this browser are added to your account when you sign in.</p>
+            <p className="mt-4 text-xs text-ink-500">
+              <span>By continuing you agree to the </span>
+              <Link href="/terms" className="underline">
+                Terms
+              </Link>
+              <span> and the </span>
+              <Link href="/privacy" className="underline">
+                Privacy Policy
+              </Link>
+              <span>, and confirm you are 18 or older.</span>
+            </p>
           </form>
         )}
       </Card>

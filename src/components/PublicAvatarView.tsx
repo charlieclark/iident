@@ -6,6 +6,7 @@ import type { AvatarPlayer } from "@/lib/avatar/player";
 import type { PublicAvatar } from "@/lib/avatar/types";
 import { AvatarChat } from "@/components/AvatarChat";
 import { Backdrop } from "@/components/Backdrop";
+import { ReportAvatar } from "@/components/ReportAvatar";
 import { cx } from "@/components/ui";
 import { AvatarStage } from "@/components/AvatarStage";
 
@@ -90,7 +91,8 @@ export function PublicAvatarView({ avatar }: { avatar: PublicAvatar }) {
           className="mx-auto max-w-xl"
         />
         <p className={cx("mx-auto mt-3 max-w-xl text-center text-[11px]", dark ? "text-white/40" : "text-ink-500")}>
-          You&apos;re talking to an AI version of {persona.name}. It can make mistakes. <span className="whitespace-nowrap">Made with iident</span>
+          You&apos;re talking to an AI version of {persona.name}. It can make mistakes. <span className="whitespace-nowrap">Made with Twiins.</span>{" "}
+          <ReportAvatar slug={avatar.slug} dark={dark} />
         </p>
       </div>
     </main>

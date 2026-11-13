@@ -1,5 +1,7 @@
 import { connection } from "next/server";
 import { canEdit } from "@/lib/server/auth";
+import { cacheTag } from "@/lib/server/avatarFiles";
+import { isSuspended } from "@/lib/server/db";
 import { contentTypeFor, openFile } from "@/lib/server/storage";
 
 /** Personal inputs are only served to the owner (edit token in `?t=`, or their signed-in session). */
@@ -10,13 +12,17 @@ const PRIVATE = /^(selfie|portrait|voice|concept)-/;
  * forever. Public files (3D models, thumbnails, backdrops) are also kept by
  * the CDN, so most requests for them never reach this function; private
  * ones are checked here every time and only cached by the owner's browser.
+ *
+ * The CDN's copies are tagged with the avatar, and dropped when it is deleted
+ * or taken down (see dropCached). Everything of an avatar that was taken down
+ * is private: only its owner can still load it.
  */
 export async function GET(req: Request, ctx: RouteContext<"/api/files/[...key]">) {
   await connection();
   const { key } = await ctx.params;
   const [avatarId, name] = key;
   if (!avatarId || !name || key.length !== 2) return new Response("Not found", { status: 404 });
-  const isPrivate = PRIVATE.test(name);
+  const isPrivate = PRIVATE.test(name) || (await isSuspended(avatarId));
   if (isPrivate && !(await canEdit(req, avatarId, new URL(req.url).searchParams.get("t")))) {
     return new Response("Forbidden", { status: 403 });
   }
@@ -31,7 +37,7 @@ export async function GET(req: Request, ctx: RouteContext<"/api/files/[...key]">
       "Cache-Control": isPrivate ? "private, max-age=3600" : "public, max-age=31536000, s-maxage=31536000, immutable",
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",
-      ...(isPrivate ? {} : { "Access-Control-Allow-Origin": "*" }),
+      ...(isPrivate ? {} : { "Access-Control-Allow-Origin": "*", "Vercel-Cache-Tag": cacheTag(avatarId) }),
     },
   });
 }

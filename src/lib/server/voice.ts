@@ -57,7 +57,7 @@ export function greetingFor(p: Persona): string {
 
 type Sample = { data: Uint8Array; filename: string; contentType: string };
 
-const cloneName = (r: AvatarRecord) => `iident ${r.persona.name.trim() || r.id}`.slice(0, 100);
+const cloneName = (r: AvatarRecord) => `Twiins ${r.persona.name.trim() || r.id}`.slice(0, 100);
 
 /** What is said in a recording, in the persona's language. */
 async function transcribeSample(record: AvatarRecord, sample: Sample): Promise<string> {
@@ -80,7 +80,7 @@ async function makeClone(
   if (provider === "fish" && config.tts.fishVoiceMode === "inline") {
     return { voiceId: "", sampleText: knownText ?? (await transcribeSample(record, sample)) };
   }
-  const params = { ...sample, audio: sample.data, description: `Voice for iident avatar ${record.id}` };
+  const params = { ...sample, audio: sample.data, description: `Voice for Twiins avatar ${record.id}` };
   const voiceId =
     provider === "fish"
       ? await fish.createVoiceModel({ ...params, title: cloneName(record) })

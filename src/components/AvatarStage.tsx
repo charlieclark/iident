@@ -47,7 +47,7 @@ export function AvatarStage({
       playerRef.current = player;
       // Handy for debugging and browser tests; not exposed in production builds.
       if (process.env.NODE_ENV === "development") {
-        (window as unknown as { __iidentPlayer?: AvatarPlayer }).__iidentPlayer = player;
+        (window as unknown as { __twiinsPlayer?: AvatarPlayer }).__twiinsPlayer = player;
       }
       try {
         await player.load(modelUrl, { faceRig: faceRig ?? null });

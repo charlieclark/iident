@@ -1,6 +1,6 @@
 # Deploying to Vercel
 
-iident runs on Vercel with a Postgres database and a Vercel Blob store. Nothing in it needs a server that stays up: every request is handled by a short-lived function, and anything that takes longer is split into steps kept in the database.
+Twiins runs on Vercel with a Postgres database and a Vercel Blob store. Nothing in it needs a server that stays up: every request is handled by a short-lived function, and anything that takes longer is split into steps kept in the database.
 
 ## What runs where
 
@@ -28,7 +28,9 @@ iident runs on Vercel with a Postgres database and a Vercel Blob store. Nothing 
    | `ANTHROPIC_API_KEY` | The avatar's conversation |
    | `ELEVENLABS_API_KEY` | Streaming speech (recommended) |
    | `FISH_API_KEY` | Cloned voices (recommended) |
-   | `RESEND_API_KEY`, `EMAIL_FROM` | Sign-in emails. Without them nobody can sign in on a deployed site |
+   | `RESEND_API_KEY`, `EMAIL_FROM` | Sign-in emails, "your avatar is ready" and reports. Without them nobody can sign in on a deployed site |
+   | `ADMIN_EMAILS` | Your own address: lets that account open `/admin` (reports, takedowns, numbers, errors) and receive reports |
+   | `NEXT_PUBLIC_LEGAL_NAME`, `NEXT_PUBLIC_CONTACT_EMAIL`, `NEXT_PUBLIC_LEGAL_JURISDICTION` | Who runs the site, how to reach them and whose law applies, shown on the Terms and Privacy pages. These are read when the site is built, so redeploy after changing them |
    | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Plans and payments. Without the secret key nobody can pay, so the deployed site builds no 3D avatars (except for `COMP_EMAILS` accounts) |
    | `COMP_EMAILS` | Your own address, to test a deployment end to end before payments are set up |
    | `NEXT_PUBLIC_APP_URL` | Only if the site's address isn't the project's production domain (see below) |
@@ -38,6 +40,9 @@ iident runs on Vercel with a Postgres database and a Vercel Blob store. Nothing 
 5. **Deploy**, then:
    - Point a Stripe webhook at `https://<your domain>/api/billing/webhook` (events: `checkout.session.completed`, `customer.subscription.created`, `.updated`, `.deleted`).
    - Verify the `EMAIL_FROM` domain in Resend.
+   - Sign in with the `ADMIN_EMAILS` address and open `/admin`. Report a test avatar from its page and check the report arrives there and by email.
+   - Read `/terms` and `/privacy` on the live site: the company name, contact address and governing law should be filled in.
+   - Publish a test avatar, load its page, delete it from the account page, and check its model address (`/api/files/<id>/model-....glb`, from the browser's network tab) now answers 404 rather than a cached copy.
    - Make one avatar from start to finish. The 3D build is the part most worth watching: it should move through sculpting, rigging and finishing on its own, including with the creator tab closed.
 
 Vercel's Hobby plan is for non-commercial use only, so a site that takes payments needs the Pro plan.
@@ -54,7 +59,7 @@ fal's callback carries a per-build secret and is only a nudge: the app then asks
 
 **Uploads.** Vercel accepts request bodies up to 4.5 MB. The app's own limit is 4 MB everywhere, and the browser makes files fit before sending: photos over 1.5 MB are scaled down (the server keeps a 1024 px selfie anyway), and a voice sample is cut at 75 seconds (cloning needs 15 to 30).
 
-**Files.** Everything is served through `/api/files/...`. Private files (selfies, portraits, voice samples, character images) are checked against the owner on every request. Public ones (3D models, thumbnails, backdrops) have unchanging names and are cached by Vercel's CDN for a year, so after the first request for a model the function and the Blob store aren't touched.
+**Files.** Everything is served through `/api/files/...`. Private files (selfies, portraits, voice samples, character images) are checked against the owner on every request. Public ones (3D models, thumbnails, backdrops) have unchanging names and are cached by Vercel's CDN for a year, so after the first request for a model the function and the Blob store aren't touched. Each cached file carries a `Vercel-Cache-Tag` naming its avatar, and deleting an avatar or taking it down drops the copies with that tag (`dropCached` in `src/lib/server/avatarFiles.ts`), so a model doesn't outlive its avatar in the cache.
 
 **Rate limits** are token buckets in a Postgres table, one statement per check, so every instance counts against the same bucket. Keys are hashed; no IP addresses are stored.
 

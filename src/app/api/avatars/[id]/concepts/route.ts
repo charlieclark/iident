@@ -4,12 +4,14 @@ import { z } from "zod";
 import { appearanceSchema, buildConceptPrompt, buildSketchEditPrompt, STYLE_ID } from "@/lib/avatar/options";
 import type { Concept } from "@/lib/avatar/types";
 import { sketchBase, withConcept } from "@/lib/server/concepts";
-import { updateAvatar } from "@/lib/server/db";
+import { avatarOwner, updateAvatar } from "@/lib/server/db";
+import { track } from "@/lib/server/insights";
 import { generateCharacterImage } from "@/lib/server/fal";
 import { HttpError, handle, ownerView, rateLimit, requireOwner } from "@/lib/server/http";
 import { ensurePortrait } from "@/lib/server/portrait";
 import { ensureStarter } from "@/lib/server/starter";
-import { download, putFile } from "@/lib/server/storage";
+import { download } from "@/lib/server/storage";
+import { saveFile } from "@/lib/server/avatarFiles";
 
 /** Drawing takes 15 to 45 seconds, after a wait for the portrait when the selfie is new. */
 export const maxDuration = 300;
@@ -66,7 +68,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
       });
   const cid = randomBytes(6).toString("base64url");
   const image = await download(url);
-  const file = await putFile(id, `concept-${cid}.${base ? "jpg" : "png"}`, image);
+  const file = await saveFile(id, `concept-${cid}.${base ? "jpg" : "png"}`, image);
   const concept: Concept = {
     id: cid,
     url,
@@ -84,5 +86,6 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
     // The picture sketches are made from must outlive the sketches made from it.
     r.concepts = withConcept(r.concepts, concept, sketchBase({ concepts: [concept, ...r.concepts], selfie: r.selfie }));
   });
+  await track(kind === "preview" ? "previewed" : "character_created", { userId: await avatarOwner(id), avatarId: id });
   return Response.json({ avatar: await ownerView(updated), created: [cid], ...(kind === "preview" ? { inline: await inlinePicture(image) } : {}) });
 });

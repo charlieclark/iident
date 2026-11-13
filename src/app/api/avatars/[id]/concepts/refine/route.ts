@@ -7,7 +7,8 @@ import type { Concept } from "@/lib/avatar/types";
 import { generateCharacterImage } from "@/lib/server/fal";
 import { HttpError, handle, ownerView, rateLimit, requireOwner } from "@/lib/server/http";
 import { ensurePortrait } from "@/lib/server/portrait";
-import { download, putFile } from "@/lib/server/storage";
+import { download } from "@/lib/server/storage";
+import { saveFile } from "@/lib/server/avatarFiles";
 
 /** Drawing takes 15 to 45 seconds. */
 export const maxDuration = 300;
@@ -35,7 +36,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
   const person = (await ensurePortrait(id)) ?? record.selfie.url;
   const url = await generateCharacterImage({ engine: "main", imageUrls: [base.url, person], prompt });
   const cid = randomBytes(6).toString("base64url");
-  const file = await putFile(id, `concept-${cid}.png`, await download(url));
+  const file = await saveFile(id, `concept-${cid}.png`, await download(url));
   const concept: Concept = {
     id: cid,
     url,

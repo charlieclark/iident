@@ -272,6 +272,7 @@ function PublishCard({ avatar, token, onChange }: { avatar: Avatar; token: strin
           />
         </div>
       </Field>
+      {avatar.suspended && <Notice tone="error">We took this avatar down after a report, so it can&apos;t be published. Contact us if you think that&apos;s a mistake.</Notice>}
       {!avatar.persona.name && <Notice tone="warn">Add a name in the Persona step first.</Notice>}
       {!avatar.voice && <Notice tone="warn">No voice yet: visitors will hear a stock voice.</Notice>}
       {error && (

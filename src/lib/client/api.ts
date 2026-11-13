@@ -24,10 +24,18 @@ export type Billing = {
   renewsAt?: number | null;
   cancelAtPeriodEnd?: boolean;
 };
-export type Account = { user: { email: string } | null; avatars: AvatarSummary[]; billing: Billing };
+export type Account = { user: { email: string; /** One of the site's owners: may open /admin. */ admin?: boolean } | null; avatars: AvatarSummary[]; billing: Billing };
+export type AdminOverview = {
+  steps: { step: string; day: number; week: number; month: number }[];
+  builds: { started: number; ready: number; failed: number };
+  errors: { id: number; at: number; source: string; route: string | null; message: string; detail: string | null }[];
+  reports: { id: string; avatarId: string; slug: string | null; reason: string; details: string; reporterEmail: string | null; createdAt: number }[];
+  takenDown: { id: string; name: string; slug: string | null; at: number; reason: string }[];
+};
+export type AdminAction = { action: "take-down"; avatarId: string; reason?: string } | { action: "restore"; avatarId: string } | { action: "dismiss"; reportId: string };
 export type BackdropChoice = z.infer<typeof backdropChoiceSchema>;
 
-const DRAFTS_KEY = "iident:drafts";
+const DRAFTS_KEY = "twiins:drafts";
 
 type Draft = { id: string; token: string; updatedAt: number };
 
@@ -46,6 +54,13 @@ export function saveDraft(id: string, token: string) {
     const drafts = listDrafts().filter((d) => d.id !== id);
     drafts.unshift({ id, token, updatedAt: Date.now() });
     localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts.slice(0, 20)));
+  } catch {}
+}
+
+/** Forgets a draft this browser made, once it has been deleted. */
+export function forgetDraft(id: string) {
+  try {
+    localStorage.setItem(DRAFTS_KEY, JSON.stringify(listDrafts().filter((d) => d.id !== id)));
   } catch {}
 }
 
@@ -89,6 +104,13 @@ export const api = {
   finishSignIn: (token: string) => request<{ user: { email: string } }>("/api/auth/verify", { method: "POST", body: JSON.stringify({ token }) }),
   signOut: () => request<{ ok: true }>("/api/auth/signout", { method: "POST" }),
   me: () => request<Account>("/api/me"),
+  /** Deletes the account with all its avatars and files, and cancels its plan. */
+  deleteAccount: () => request<{ deleted: true }>("/api/me", { method: "DELETE" }),
+  /** Deletes one avatar and everything stored for it. Works through the account's session. */
+  deleteAvatar: (id: string) => request<{ deleted: true }>(`/api/avatars/${id}`, { method: "DELETE", token: tokenFor(id) }),
+  report: (body: { slug: string; reason: string; details: string; email: string }) => request<{ received: true }>("/api/report", { method: "POST", body: JSON.stringify(body) }),
+  adminOverview: () => request<AdminOverview>("/api/admin/overview"),
+  adminAction: (body: AdminAction) => request<{ ok: true }>("/api/admin/action", { method: "POST", body: JSON.stringify(body) }),
   /** Starts checkout for a plan; open the returned URL. */
   checkout: (plan: PaidPlanId) => request<{ url: string }>("/api/billing/checkout", { method: "POST", body: JSON.stringify({ plan }) }),
   confirmCheckout: (sessionId: string) => request<{ plan: PlanId }>("/api/billing/confirm", { method: "POST", body: JSON.stringify({ sessionId }) }),

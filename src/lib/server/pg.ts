@@ -131,18 +131,18 @@ async function open(): Promise<Database> {
 }
 
 // Kept on globalThis so development hot reloads reuse the connection.
-const g = globalThis as unknown as { __iidentPg?: Promise<Database> };
+const g = globalThis as unknown as { __twiinsPg?: Promise<Database> };
 
 export function database(): Promise<Database> {
-  if (!g.__iidentPg) {
+  if (!g.__twiinsPg) {
     const opening = open();
-    g.__iidentPg = opening;
+    g.__twiinsPg = opening;
     // A failed start (database unreachable) is retried by the next request.
     opening.catch(() => {
-      if (g.__iidentPg === opening) g.__iidentPg = undefined;
+      if (g.__twiinsPg === opening) g.__twiinsPg = undefined;
     });
   }
-  return g.__iidentPg;
+  return g.__twiinsPg;
 }
 
 export async function query<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]> {

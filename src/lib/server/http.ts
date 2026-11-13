@@ -6,19 +6,34 @@ import { createHash } from "node:crypto";
 import { mayEdit } from "./auth";
 import { sketchBase } from "./concepts";
 import { loadAvatar } from "./db";
+import { logError } from "./insights";
 import { one, query } from "./pg";
 import { fileUrl } from "./storage";
 import { replyAllowance, usageOf, type Allowance } from "./usage";
 
 export { HttpError };
 
-export function errorResponse(err: unknown) {
+export async function errorResponse(err: unknown, route?: string) {
   if (err instanceof HttpError) {
+    // A refusal (4xx) is the app working; only failures on our side are worth looking at later.
+    if (err.status >= 500) await logError("server", err.message, { route });
     return Response.json({ error: err.message }, { status: err.status });
   }
   console.error(err);
   const message = err instanceof Error ? err.message : "Unexpected error";
+  await logError("server", message, { route, detail: err instanceof Error ? err.stack : undefined });
   return Response.json({ error: message.slice(0, 300) }, { status: 500 });
+}
+
+/** "POST /api/avatars/abc/selfie" for the request a handler was called with, if it was called with one. */
+function routeOf(args: unknown[]): string | undefined {
+  const req = args[0];
+  if (!(req instanceof Request)) return undefined;
+  try {
+    return `${req.method} ${new URL(req.url).pathname}`;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Wraps a route handler so thrown HttpErrors become JSON responses. */
@@ -29,7 +44,7 @@ export function handle<A extends unknown[]>(fn: (...args: A) => Promise<Response
     } catch (err) {
       // Next.js signals of its own (such as a GET route declining to be prerendered at build time) pass through.
       if (typeof (err as { digest?: unknown } | null)?.digest === "string") throw err;
-      return errorResponse(err);
+      return errorResponse(err, routeOf(args));
     }
   };
 }
@@ -118,6 +133,8 @@ export async function ownerView(r: AvatarRecord) {
     id: r.id,
     slug: r.slug,
     published: r.published,
+    /** Taken down by the site's owner: its page is unreachable and it can't be published. */
+    suspended: !!r.suspended,
     consent: r.consent,
     appearance: r.appearance,
     persona: r.persona,
@@ -167,6 +184,8 @@ export function summaryView(r: AvatarRecord, allowance: Allowance) {
     published: r.published,
     ready: r.model?.status === "ready",
     building: !!r.model && r.model.status !== "ready" && r.model.status !== "failed",
+    /** Taken down by the site's owner: its page is unreachable and it can't be published. */
+    suspended: !!r.suspended,
     imageUrl: r.thumbnail ? fileUrl(r.thumbnail) : concept ? fileUrl(concept.file) : null,
     updatedAt: r.updatedAt,
     usage: { ...usageOf(r), ...allowance },
@@ -176,7 +195,7 @@ export function summaryView(r: AvatarRecord, allowance: Allowance) {
 export type AvatarSummary = ReturnType<typeof summaryView>;
 
 export function publicView(r: AvatarRecord): PublicAvatar | null {
-  if (!r.published || !r.slug || r.model?.status !== "ready" || !r.model.file) return null;
+  if (!r.published || r.suspended || !r.slug || r.model?.status !== "ready" || !r.model.file) return null;
   return {
     id: r.id,
     slug: r.slug,

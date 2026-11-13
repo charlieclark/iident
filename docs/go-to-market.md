@@ -1,4 +1,4 @@
-# Getting iident to something sellable
+# Getting Twiins to something sellable
 
 Where the product stands (November 2026), what it costs to run, how to charge for it, and what a new user still trips over. Figures marked "estimate" were not measured.
 
@@ -46,14 +46,14 @@ Not in place: annual plans, extra replies as an add-on, a trial, refunds or pror
 
 ## How to sell it
 
-**Recommended first: inside Liinks.** Liinks already has accounts, billing, and about 5,300 paying profiles who are the exact audience. iident replaces Liinks' AI Chat (plan in `docs/platform.md`) and becomes a reason to choose or stay on Pro, or a paid add-on. Nothing about accounts or payments has to be built twice. What iident needs for that is the platform API: keys, visitor sessions carrying the page's content, the embed, and usage reporting per avatar (the metering above is the start of that).
+**Recommended first: inside Liinks.** Liinks already has accounts, billing, and about 5,300 paying profiles who are the exact audience. Twiins replaces Liinks' AI Chat (plan in `docs/platform.md`) and becomes a reason to choose or stay on Pro, or a paid add-on. Nothing about accounts or payments has to be built twice. What Twiins needs for that is the platform API: keys, visitor sessions carrying the page's content, the embed, and usage reporting per avatar (the metering above is the start of that).
 
 A cost-based way to set the Liinks offer:
 
 - Include one avatar build with the plan. $2.65 is small next to a subscription, but limit rebuilds (for example two a month), since each costs $2.36.
 - Include a monthly allowance of replies (300 costs at most $3 to $6) and sell more as an add-on, or let the avatar fall back to text when it runs out, as it does now.
 
-**Later, or in parallel: iident on its own.** A consumer product needs sign-in and Stripe. A shape that fits the costs:
+**Later, or in parallel: Twiins on its own.** A consumer product needs sign-in and Stripe. A shape that fits the costs:
 
 | | Free | Creator (about $10 a month) | Pro (about $29 a month) |
 | --- | --- | --- | --- |

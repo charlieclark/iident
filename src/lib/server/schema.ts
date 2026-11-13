@@ -47,4 +47,39 @@ export const MIGRATIONS: string[][] = [
       at BIGINT NOT NULL
     )`,
   ],
+  [
+    // What visitors report about a published avatar, for the owner of the site to act on.
+    `CREATE TABLE reports (
+      id TEXT PRIMARY KEY,
+      avatar_id TEXT NOT NULL,
+      slug TEXT,
+      reason TEXT NOT NULL,
+      details TEXT NOT NULL DEFAULT '',
+      reporter_email TEXT,
+      status TEXT NOT NULL DEFAULT 'open',
+      created_at BIGINT NOT NULL,
+      resolved_at BIGINT
+    )`,
+    `CREATE INDEX reports_status ON reports (status, created_at)`,
+    // What people do, one row per step (signed up, uploaded a selfie, built, published...). Kept here, sent nowhere.
+    `CREATE TABLE events (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      user_id TEXT,
+      avatar_id TEXT,
+      at BIGINT NOT NULL,
+      props JSONB NOT NULL DEFAULT '{}'
+    )`,
+    `CREATE INDEX events_name_at ON events (name, at)`,
+    // What went wrong, on the server and in people's browsers.
+    `CREATE TABLE errors (
+      id BIGSERIAL PRIMARY KEY,
+      at BIGINT NOT NULL,
+      source TEXT NOT NULL,
+      route TEXT,
+      message TEXT NOT NULL,
+      detail TEXT
+    )`,
+    `CREATE INDEX errors_at ON errors (at)`,
+  ],
 ];

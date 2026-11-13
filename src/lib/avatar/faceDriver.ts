@@ -237,7 +237,7 @@ export class FaceDriver {
         .replace("#include <common>", `#include <common>\n${FACE_FRAGMENT_HEADER}`)
         .replace("#include <map_fragment>", `#include <map_fragment>\n${FACE_FRAGMENT_BODY}`);
     };
-    material.customProgramCacheKey = () => "iident-face-v1";
+    material.customProgramCacheKey = () => "twiins-face-v1";
     return material;
   }
 

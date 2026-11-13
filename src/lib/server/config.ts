@@ -36,7 +36,7 @@ export const config = {
    */
   email: {
     resendKey: env("RESEND_API_KEY"),
-    from: env("EMAIL_FROM", "iident <login@example.com>")!,
+    from: env("EMAIL_FROM", "Twiins <login@example.com>")!,
   },
 
   /**
@@ -61,6 +61,15 @@ export const config = {
       .map((e) => e.trim().toLowerCase())
       .filter(Boolean),
   },
+
+  /**
+   * Who may open /admin (reports, takedowns, numbers and errors) and who is
+   * emailed when an avatar is reported: comma-separated emails of accounts.
+   */
+  adminEmails: (env("ADMIN_EMAILS") ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
 
   /**
    * Speech providers.

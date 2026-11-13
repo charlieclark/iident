@@ -41,11 +41,11 @@ describe("Fish Audio client", () => {
   it("uploads a recording as a private fast model", async () => {
     const calls = mockFetch(() => Response.json({ _id: "model-1", state: "trained" }, { status: 201 }));
     const id = await fish.createVoiceModel({
-      title: "iident Sam",
+      title: "Twiins Sam",
       audio: new Uint8Array([1, 2, 3]),
       filename: "voice.wav",
       contentType: "audio/wav",
-      description: "Voice for iident avatar a1",
+      description: "Voice for Twiins avatar a1",
     });
     expect(id).toBe("model-1");
     const { url, init } = calls[0];
@@ -57,8 +57,8 @@ describe("Fish Audio client", () => {
       type: "tts",
       train_mode: "fast",
       visibility: "private",
-      title: "iident Sam",
-      description: "Voice for iident avatar a1",
+      title: "Twiins Sam",
+      description: "Voice for Twiins avatar a1",
     });
     expect((form.get("voices") as File).name).toBe("voice.wav");
   });

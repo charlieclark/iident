@@ -2,6 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { config } from "./config";
 import { hashToken, loadAvatar, tokenMatches, type LoadedAvatar } from "./db";
+import { track } from "./insights";
 import { one, query } from "./pg";
 
 /**
@@ -12,7 +13,7 @@ import { one, query } from "./pg";
 
 export type User = { id: string; email: string; createdAt: number };
 
-export const SESSION_COOKIE = "iident_session";
+export const SESSION_COOKIE = "twiins_session";
 const LINK_TTL = 20 * 60 * 1000;
 const SESSION_TTL = 60 * 24 * 60 * 60 * 1000;
 const LINKS_PER_HOUR = 5;
@@ -35,7 +36,12 @@ export async function consumeLoginToken(token: string, now = Date.now()): Promis
   // Deleting and reading in one statement makes the token single use even when two requests race.
   const row = await one<{ email: string; expires_at: number }>("DELETE FROM login_tokens WHERE token_hash = $1 RETURNING email, expires_at", [hashToken(token)]);
   if (!row || Number(row.expires_at) < now) return null;
-  await query("INSERT INTO users (id, email, created_at) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING", [`u_${randomBytes(9).toString("hex")}`, row.email, now]);
+  const created = await query<{ id: string }>("INSERT INTO users (id, email, created_at) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING RETURNING id", [
+    `u_${randomBytes(9).toString("hex")}`,
+    row.email,
+    now,
+  ]);
+  if (created[0]) await track("signed_up", { userId: created[0].id });
   return userByEmail(row.email);
 }
 

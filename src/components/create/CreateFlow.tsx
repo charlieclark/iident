@@ -139,7 +139,7 @@ export function CreateFlow() {
     <div className="min-h-dvh">
       <header className="sticky top-0 z-30 border-b border-ink-100/80 bg-paper/85 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3 sm:px-6">
-          <Link href="/" aria-label="iident home">
+          <Link href="/" aria-label="Twiins home">
             <Logo />
           </Link>
           <nav aria-label="Steps" className="mx-auto hidden items-center gap-1 md:flex">

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type Account } from "./api";
 
-const NEXT_KEY = "iident:after-sign-in";
+const NEXT_KEY = "twiins:after-sign-in";
 
 /** Only paths inside the app: never follow a link to another site after signing in. */
 export const safeNext = (path: string | null | undefined) => (path && /^\/(?![/\\])/.test(path) ? path : null);

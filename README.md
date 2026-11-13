@@ -1,4 +1,4 @@
-# iident
+# Twiins
 
 Turn a selfie and a short voice recording into a **talking 3D avatar** of yourself, give it a persona and the things it should know and show, and share one link that anyone can open to chat with it by voice or text. While it talks, the avatar can put your links, products, videos and images on screen as cards.
 
@@ -114,7 +114,9 @@ src/
   app/
     page.tsx                  landing page
     create/page.tsx           the five-step creator
-    login, auth/verify, me    sign in by email link, and the account's avatars
+    login, auth/verify, me    sign in by email link, and the account's avatars (delete one, or the account)
+    terms, privacy            the Terms and the Privacy Policy
+    admin                     reports and takedowns, how far people get, recent errors (ADMIN_EMAILS only)
     pricing, billing/return   plans, and where Stripe Checkout returns to
     a/[slug]/page.tsx         public avatar page (Open Graph tags, real 404s)
     api/auth/..., api/me      sign-in links, sessions, attaching browser drafts to an account
@@ -125,6 +127,9 @@ src/
     api/stt                   visitor speech-to-text
     api/files/[...key]        stored assets (selfies, voice samples and concepts are owner-only)
     api/fal/webhook           fal reports a finished 3D step here, so builds carry on unattended
+    api/report                a visitor reports a published avatar
+    api/admin/...             what /admin shows, and take down, restore, dismiss
+    api/log                   errors from people's browsers
   components/
     create/                   creator steps
     AvatarStage.tsx           React wrapper around the three.js player
@@ -162,6 +167,15 @@ Setting up Stripe: set `STRIPE_SECRET_KEY`; add a webhook endpoint at `/api/bill
 - Selfies, their clean portraits, voice samples and concept images are only served to the owner; the public page only exposes the 3D model and a thumbnail.
 - An avatar belongs to the account that created it, and can be edited by that account and by the browser that made it (a random edit token kept in that browser, also used in its private file links). Accounts sign in with a one-time email link (20 minutes, single use, 5 an hour per address) that starts a 60-day session in an httpOnly, SameSite=Lax cookie. Only hashes of edit tokens, link tokens and session tokens are stored. An avatar that belongs to an account can't be claimed by another one.
 - Per-IP rate limits (counted in the database, with the addresses hashed) protect the expensive endpoints, and each avatar has a monthly cap on replies to visitors (`MONTHLY_REPLY_LIMIT`, default 300): past it, the avatar answers in text only until the next month.
+
+## Running the site
+
+- **Deleting.** A creator can delete an avatar from their account page: its row, every stored file (selfie, portrait, character images, model, voice recording) and its cloned voice go at once, and its page stops working. Deleting the account ends the plan at Stripe first, then removes every avatar, the sessions and the account; if the plan can't be ended, nothing is deleted, so nobody keeps paying for an account that is gone. A picture or model still being made when its avatar is deleted is thrown away when it arrives (`src/lib/server/avatarFiles.ts`). The 3D model and thumbnail are public and cached by Vercel's CDN for a year, so each is tagged with its avatar and the cached copies are dropped on deletion and on takedown; a browser that already loaded a model keeps its own copy.
+- **Reports and takedowns.** Every public avatar page has a Report link (impersonation, someone's photo or voice used without permission, harmful content, other). Reports are kept in the database and emailed to `ADMIN_EMAILS`. At `/admin` an owner of the site can dismiss a report or take the avatar down: its page and conversation return 404 at once, its 3D model and other files can only be loaded by its creator, the creator sees "Taken down" and can't publish it again, and it can be restored. `/admin` and its API answer 404 to everyone else.
+- **Numbers.** The app records the steps people take (signed up, uploaded a photo, previewed a look, created a character, opened checkout, started a plan, started a build, build finished, published) in its own `events` table, and `/admin` shows how many people reached each in the last day, week and 30 days. Nothing is sent to an analytics service and visitors to avatar pages aren't tracked. When an account is deleted its events stay countable under a random id.
+- **Errors.** Server errors (any 5xx from a route), failed builds and uncaught errors in people's browsers are written to the `errors` table and listed at `/admin`, newest first, for 30 days.
+- **Emails.** Besides the sign-in link: the creator is told when a 3D build finishes or fails (it takes minutes and they may have closed the page), and `ADMIN_EMAILS` are told about each report.
+- **Terms and Privacy.** `/terms` and `/privacy` are drafts written to match what the app does with photos, voices and conversations. They name the company, contact address and governing law from `NEXT_PUBLIC_LEGAL_NAME`, `NEXT_PUBLIC_CONTACT_EMAIL` and `NEXT_PUBLIC_LEGAL_JURISDICTION`. Have a lawyer read them before taking money.
 
 ## Production notes
 
