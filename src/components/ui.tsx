@@ -198,7 +198,7 @@ export function Logo({ className }: { className?: string }) {
         <span className="absolute size-2 -translate-x-1 rounded-full bg-white" />
         <span className="absolute size-2 translate-x-1 rounded-full bg-accent-300" />
       </span>
-      iident
+      Twiins
     </span>
   );
 }

@@ -15,12 +15,12 @@ import path from "node:path";
  *   TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres npm test
  */
 export async function freshDatabase(name: string): Promise<void> {
-  process.env.DATA_DIR = mkdtempSync(path.join(tmpdir(), `iident-${name}-`));
+  process.env.DATA_DIR = mkdtempSync(path.join(tmpdir(), `twiins-${name}-`));
   delete process.env.DATABASE_URL;
   delete process.env.POSTGRES_URL;
   const server = process.env.TEST_DATABASE_URL;
   if (!server) return;
-  const database = `iident_test_${name.replace(/\W/g, "_")}_${randomBytes(4).toString("hex")}`;
+  const database = `twiins_test_${name.replace(/\W/g, "_")}_${randomBytes(4).toString("hex")}`;
   const { Client } = await import("pg");
   const admin = new Client({ connectionString: server });
   await admin.connect();

@@ -4,7 +4,8 @@ import { heightMeters } from "@/lib/avatar/options";
 import { sessionUser } from "@/lib/server/auth";
 import { buildNeedsPayment, countBuild, requireBuildAllowance } from "@/lib/server/billing";
 import { requireFal } from "@/lib/server/config";
-import { claimAvatar } from "@/lib/server/db";
+import { avatarOwner, claimAvatar } from "@/lib/server/db";
+import { track } from "@/lib/server/insights";
 import { HttpError, handle, ownerView, rateLimit, requireOwner } from "@/lib/server/http";
 import { isBuilding, startModelJob } from "@/lib/server/jobs";
 
@@ -39,6 +40,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
   // Submits the first step to the 3D service; the rest follows as it is polled (see jobs.ts).
   const { record: started, finish } = await startModelJob(id, parsed.data.conceptId, heightMeters(record.appearance.height));
   if (payer) await countBuild(payer);
+  await track("build_started", { userId: payer ?? (await avatarOwner(id)), avatarId: id });
   if (finish) after(finish);
   return Response.json({ avatar: await ownerView(started) });
 });

@@ -2,10 +2,14 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import type { AvatarRecord, ModelJob } from "@/lib/avatar/types";
 import { config, HttpError } from "./config";
-import { getAvatar, updateAvatar } from "./db";
+import { userById } from "./auth";
+import { avatarOwner, getAvatar, updateAvatar } from "./db";
+import { sendAvatarReadyEmail, sendBuildFailedEmail } from "./email";
 import { meshResult, rigResult, submitMesh, submitRig } from "./fal";
 import { mergeCharacter } from "./glb";
-import { download, putFile } from "./storage";
+import { logError, track } from "./insights";
+import { download } from "./storage";
+import { saveFile } from "./avatarFiles";
 
 /**
  * The 3D pipeline for one avatar:
@@ -109,14 +113,36 @@ function settle(avatarId: string, leaseId: string, patch: Partial<ModelJob>): Pr
   });
 }
 
+/**
+ * A build takes minutes and carries on with the page closed, so its owner is
+ * told by email how it ended. Also counted, for the numbers on /admin.
+ */
+async function ended(record: AvatarRecord, outcome: "ready" | "failed"): Promise<void> {
+  try {
+    const ownerId = await avatarOwner(record.id);
+    await track(outcome === "ready" ? "build_ready" : "build_failed", { userId: ownerId, avatarId: record.id });
+    if (outcome === "failed") await logError("build", record.model?.error ?? "3D build failed", { route: record.id });
+    const owner = ownerId ? await userById(ownerId) : null;
+    if (!owner) return;
+    const link = `${config.appUrl}/create?id=${record.id}`;
+    await (outcome === "ready" ? sendAvatarReadyEmail : sendBuildFailedEmail)(owner.email, record.persona.name, link);
+  } catch (err) {
+    console.warn(`[model job ${record.id}] could not report the outcome:`, err);
+  }
+}
+
 /** Marks the build failed, whatever stage it is at, unless it has already ended. */
-function fail(avatarId: string, message: string): Promise<AvatarRecord> {
-  return updateAvatar(avatarId, (r) => {
+async function fail(avatarId: string, message: string): Promise<AvatarRecord> {
+  let changed = false;
+  const record = await updateAvatar(avatarId, (r) => {
     if (!r.model || !isBuilding(r.model)) return false;
     const now = Date.now();
     r.model = { ...r.model, status: "failed", error: message, updatedAt: now, finishedAt: now };
     delete r.model.lease;
+    changed = true;
   });
+  if (changed) await ended(record, "failed");
+  return record;
 }
 
 /**
@@ -203,8 +229,9 @@ async function finishModel(avatarId: string, leaseId: string): Promise<void> {
     const clips = m.clipSources ?? [];
     const [riggedData, ...clipData] = await Promise.all([download(rigged), ...clips.map((c) => download(c.url))]);
     const merged = await mergeCharacter({ rigged: riggedData, clips: clips.map((c, i) => ({ name: c.name, data: clipData[i] })) });
-    const file = await putFile(avatarId, `model-${Date.now().toString(36)}.glb`, merged.glb);
-    await settle(avatarId, leaseId, { status: "ready", file, clips: merged.clips, finishedAt: Date.now() });
+    const file = await saveFile(avatarId, `model-${Date.now().toString(36)}.glb`, merged.glb);
+    const record = await settle(avatarId, leaseId, { status: "ready", file, clips: merged.clips, finishedAt: Date.now() });
+    if (record.model?.status === "ready" && record.model.file === file) await ended(record, "ready");
   } catch (err) {
     console.error(`[model job ${avatarId}] finishing`, err);
     // Give the lease back so the next call tries again.

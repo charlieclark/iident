@@ -1,6 +1,6 @@
-# iident as a platform
+# Twiins as a platform
 
-iident turns a person into a talking avatar that **knows things** and can **show things**. It is meant to be embedded by other products, not only used through its own share pages. Liinks is the first host: its visitor AI Chat gets replaced by an iident avatar.
+Twiins turns a person into a talking avatar that **knows things** and can **show things**. It is meant to be embedded by other products, not only used through its own share pages. Liinks is the first host: its visitor AI Chat gets replaced by a Twiins avatar.
 
 Nothing here is specific to link-in-bio pages. A shop, a portfolio, a course site or a booking page describes its content the same way, and the avatar works the same way on all of them.
 
@@ -38,7 +38,7 @@ Validation lives in one zod schema shared by the server and the editor. URLs mus
 Two rules keep this safe and predictable:
 
 1. **The avatar only shows items by id.** It has no other links and is told never to invent one or read a web address aloud. An id that is not in the catalog is dropped on the server.
-2. **The host owns its content.** It sends the catalog, and it can render items with its own components. iident only needs the generic fields to draw a fallback card.
+2. **The host owns its content.** It sends the catalog, and it can render items with its own components. Twiins only needs the generic fields to draw a fallback card.
 
 ## How the avatar shows things
 
@@ -64,7 +64,7 @@ Timing: `show` is sent as soon as the tool call completes, right after the text 
 
 Without an Anthropic key the server runs a demo mode that shows the item whose title best matches the visitor's words. It exists so the cards, speech and lip sync can be tested end to end without a key.
 
-## Rendering: iident's cards or the host's own
+## Rendering: Twiins' cards or the host's own
 
 **Default rendering** (`src/components/ItemCard.tsx`, used by the share page and the creator preview):
 
@@ -72,9 +72,9 @@ Without an Anthropic key the server runs a demo mode that shows the item whose t
 - `image`: the picture with a caption, opening `url` or the image.
 - `video`: a poster (YouTube thumbnails are derived automatically) that turns into an inline player: YouTube through `youtube-nocookie.com`, Vimeo, or a plain video file. Playing media stops the avatar's speech. Other video links fall back to a link card.
 
-**Host rendering.** A host that wants items to look native renders them itself from the `show` event, using `id` and `data`. For Liinks that means its existing block cards, in the page's theme (see below). The planned embed exposes this as a `renderItem` callback and an `iident:show` DOM event the host can cancel.
+**Host rendering.** A host that wants items to look native renders them itself from the `show` event, using `id` and `data`. For Liinks that means its existing block cards, in the page's theme (see below). The planned embed exposes this as a `renderItem` callback and an `Twiins:show` DOM event the host can cancel.
 
-**Clicks** (planned): the embed reports card opens to the host and to iident, so both can count them.
+**Clicks** (planned): the embed reports card opens to the host and to Twiins, so both can count them.
 
 ## Platform API (proposed)
 
@@ -95,7 +95,7 @@ The same engine, exposed to other products. Everything below is a proposal to ag
 
 **Embed:** a script that mounts the avatar stage and, optionally, the default chat UI. Hosts that keep their own chat UI use it headless: the SDK plays speech in sync with the avatar and hands every event to the host.
 
-**Assistant mode (no 3D model).** The conversation, context and items work without an avatar: text only, or voice with a stock voice and a profile photo. Hosts can move an existing chatbot onto iident first and add the 3D avatar per user later. Liinks needs this so current AI Chat users keep a working chat.
+**Assistant mode (no 3D model).** The conversation, context and items work without an avatar: text only, or voice with a stock voice and a profile photo. Hosts can move an existing chatbot onto Twiins first and add the 3D avatar per user later. Liinks needs this so current AI Chat users keep a working chat.
 
 **Metering** per conversation turn, per synthesized character and per 3D build, reported in `usage` webhooks and by API.
 
@@ -121,7 +121,7 @@ Liinks' visitor AI Chat is a Pro beta. A badge on the page opens a chat panel th
 
 ### How it maps
 
-| Liinks today | With iident |
+| Liinks today | With Twiins |
 | --- | --- |
 | Bio, `aiChatBusinessDescription` | `context.knowledge` |
 | FAQ, Resume, Testimonials, Timeline, Quote, Text blocks | `context.knowledge`, as text |
@@ -134,11 +134,11 @@ Liinks' visitor AI Chat is a Pro beta. A badge on the page opens a chat panel th
 
 ### Steps
 
-1. **iident: context and items.** Done in this change.
-2. **iident: platform API.** Keys, `external_id`, sessions with per-session context, CORS, the embed SDK, webhooks, assistant mode.
-3. **Liinks server.** `aiChat.ts` builds the context from the page (reusing `getIsLinkSearchable`, `filterLinksByWeeklySchedule` and the social-link filter it already has) and mints an iident session instead of calling OpenAI. Gating stays on the Liinks server: a session is only minted when `getIsAiChatOffered` and `getPublicAccessErrorForUser` allow it, as the chat checks today, and Liinks' rate limits apply at minting.
-4. **Liinks client.** The AI Chat panel streams from iident through the SDK. When the creator has an avatar, the stage sits above the messages. `show` events render through the existing block renderer, and the panel's built-in text goes through `getTranslations`.
-5. **Liinks settings.** "Create your avatar" opens iident's hosted creator. `avatar.ready` stores an `iidentAvatarId` (a scalar column on `User`). The greeting and business description move into the persona and context. Existing users keep a text assistant until they create an avatar.
+1. **Twiins: context and items.** Done in this change.
+2. **Twiins: platform API.** Keys, `external_id`, sessions with per-session context, CORS, the embed SDK, webhooks, assistant mode.
+3. **Liinks server.** `aiChat.ts` builds the context from the page (reusing `getIsLinkSearchable`, `filterLinksByWeeklySchedule` and the social-link filter it already has) and mints a Twiins session instead of calling OpenAI. Gating stays on the Liinks server: a session is only minted when `getIsAiChatOffered` and `getPublicAccessErrorForUser` allow it, as the chat checks today, and Liinks' rate limits apply at minting.
+4. **Liinks client.** The AI Chat panel streams from Twiins through the SDK. When the creator has an avatar, the stage sits above the messages. `show` events render through the existing block renderer, and the panel's built-in text goes through `getTranslations`.
+5. **Liinks settings.** "Create your avatar" opens Twiins' hosted creator. `avatar.ready` stores an `TwiinsAvatarId` (a scalar column on `User`). The greeting and business description move into the persona and context. Existing users keep a text assistant until they create an avatar.
 6. **Cutover.** Remove the OpenAI path and `assistant.newChat`. Record conversations, cards shown and cards opened in Tinybird `product_events`, and count card opens as link clicks.
 
 ### Risks
@@ -146,11 +146,11 @@ Liinks' visitor AI Chat is a Pro beta. A badge on the page opens a chat panel th
 - **Cost per conversation.** One Claude call per turn plus speech per sentence. It needs per-page monthly caps before it can be part of Pro.
 - **Voices.** Cloned voices are spoken by Fish Audio straight from the stored recording, sent with each request, so nothing is stored per voice and voice cloning scales with the number of avatars instead of an ElevenLabs plan (2,200 slots on Business). It adds about 0.2 s before the first word compared with an ElevenLabs clone. Cloning still needs the creator's consent, and it has an off switch (`VOICE_CLONING=off`) that falls back to stock voices.
 - **Weight on mobile.** The avatar is about 2 MB plus three.js. Load it only when the visitor opens the chat.
-- **Data ownership.** Transcripts would live in iident; the host should be able to export and delete them per user.
+- **Data ownership.** Transcripts would live in Twiins; the host should be able to export and delete them per user.
 
 ### Questions to settle
 
 1. Should current AI Chat users move to assistant mode automatically, or opt in?
 2. Is the avatar part of Pro, or a paid add-on with its own usage limits?
 3. Hosted creator in a popup, or an embedded creator inside the Liinks editor?
-4. Does iident keep its own share pages (`/a/[slug]`), or become API-only once Liinks is live?
+4. Does Twiins keep its own share pages (`/a/[slug]`), or become API-only once Liinks is live?

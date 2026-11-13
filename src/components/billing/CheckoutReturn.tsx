@@ -32,7 +32,7 @@ export function CheckoutReturn() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4 py-10">
-      <Link href="/" aria-label="iident home" className="mb-8 self-center">
+      <Link href="/" aria-label="Twiins home" className="mb-8 self-center">
         <Logo />
       </Link>
       <Card className="p-6 text-center sm:p-8">

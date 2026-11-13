@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { AccountLink } from "@/components/account/AccountLink";
+import { SiteFooter } from "@/components/SiteFooter";
 import { Button, cx, Logo, Notice } from "@/components/ui";
 import { isPaidPlan, PLAN_ORDER, PLANS, type PaidPlanId, type Plan } from "@/lib/billing/plans";
 import { rememberNext, safeNext, useAccount } from "@/lib/client/account";
@@ -100,7 +101,7 @@ export function Pricing() {
   return (
     <div className="min-h-dvh">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
-        <Link href="/" aria-label="iident home">
+        <Link href="/" aria-label="Twiins home">
           <Logo />
         </Link>
         <AccountLink next={next ?? "/pricing"} />
@@ -162,6 +163,7 @@ export function Pricing() {
           Plans are billed monthly and you can cancel any time. If a plan ends, your avatars are kept and stop answering until you&apos;re back.
         </p>
       </main>
+      <SiteFooter />
     </div>
   );
 }

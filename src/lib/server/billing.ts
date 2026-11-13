@@ -143,7 +143,7 @@ type StripeCheckoutSession = {
   subscription?: string | StripeSubscription | null;
 };
 
-async function stripe<T>(method: "GET" | "POST", path: string, params: Record<string, string> = {}): Promise<T> {
+async function stripe<T>(method: "GET" | "POST" | "DELETE", path: string, params: Record<string, string> = {}): Promise<T> {
   if (!config.stripe.secretKey) throw new HttpError(503, "Payments aren't set up.");
   const query = new URLSearchParams(params);
   const url = `${config.stripe.apiBase}/v1/${path}`;
@@ -190,7 +190,7 @@ export async function createCheckout(user: User, plan: PaidPlanId): Promise<stri
           "line_items[0][price_data][currency]": "usd",
           "line_items[0][price_data][unit_amount]": String(PLANS[plan].price * 100),
           "line_items[0][price_data][recurring][interval]": "month",
-          "line_items[0][price_data][product_data][name]": `iident ${PLANS[plan].name}`,
+          "line_items[0][price_data][product_data][name]": `Twiins ${PLANS[plan].name}`,
           "line_items[0][price_data][product_data][tax_code]": config.stripe.taxCode,
         }),
     "subscription_data[metadata][plan]": plan,
@@ -232,6 +232,21 @@ export async function confirmCheckout(user: User, sessionId: string): Promise<Pl
   if (session.status !== "complete" || !sub || typeof sub === "string") throw new HttpError(402, "That checkout wasn't completed.");
   await saveSubscription(user.id, sub);
   return planOf(user);
+}
+
+/**
+ * Ends an account's subscription now, so that deleting an account never
+ * leaves someone paying for it. Throws if Stripe can't be reached: the
+ * account must then not be deleted either.
+ */
+export async function cancelSubscription(userId: string): Promise<boolean> {
+  const account = await accountOf(userId);
+  if (!hasActiveSubscription(account)) return false;
+  await stripe("DELETE", `subscriptions/${account.subscription!.id}`);
+  await updateAccount(userId, (a) => {
+    if (a.subscription) a.subscription = { ...a.subscription, status: "canceled" };
+  });
+  return true;
 }
 
 /** A link to Stripe's billing portal (change plan, card, cancel). */

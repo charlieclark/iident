@@ -6,7 +6,8 @@ import { requireFal } from "@/lib/server/config";
 import { updateAvatar } from "@/lib/server/db";
 import { generateBackdrop } from "@/lib/server/fal";
 import { HttpError, MAX_UPLOAD_BYTES, handle, ownerView, rateLimit, requireOwner } from "@/lib/server/http";
-import { download, putFile } from "@/lib/server/storage";
+import { download } from "@/lib/server/storage";
+import { saveFile } from "@/lib/server/avatarFiles";
 
 const promptSchema = z.object({ prompt: z.string().trim().min(3).max(200) });
 
@@ -51,7 +52,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
   } catch {
     throw new HttpError(400, "We couldn't read that image. Try a JPG, PNG or WebP.");
   }
-  const file = await putFile(id, `backdrop-${randomBytes(5).toString("hex")}.webp`, prepared.webp);
+  const file = await saveFile(id, `backdrop-${randomBytes(5).toString("hex")}.webp`, prepared.webp);
   const backdrop: Backdrop = { kind: "image", file, tone: prepared.tone, ...(prompt ? { prompt } : {}) };
   const record = await updateAvatar(id, (r) => {
     r.backdrop = backdrop;

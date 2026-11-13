@@ -85,7 +85,8 @@ export async function getAvatar(id: string): Promise<AvatarRecord | null> {
 }
 
 export async function getAvatarBySlug(slug: string): Promise<AvatarRecord | null> {
-  return loaded(await one<Row>(`SELECT ${COLUMNS} FROM avatars WHERE slug = $1 AND published`, [slug.toLowerCase()]))?.record ?? null;
+  // An avatar that was taken down keeps its link (nobody else can claim it) but is not found by it.
+  return loaded(await one<Row>(`SELECT ${COLUMNS} FROM avatars WHERE slug = $1 AND published AND data->'suspended' IS NULL`, [slug.toLowerCase()]))?.record ?? null;
 }
 
 /** Whether `token` is the edit token whose hash is stored with an avatar. */
@@ -137,6 +138,22 @@ export async function avatarOwner(id: string): Promise<string | null> {
 export async function claimAvatar(id: string, userId: string): Promise<boolean> {
   const row = await one<{ owner_id: string | null }>("UPDATE avatars SET owner_id = COALESCE(owner_id, $2) WHERE id = $1 RETURNING owner_id", [id, userId]);
   return row?.owner_id === userId;
+}
+
+/** Removes an avatar's record. Its files are removed separately (see removal.ts). */
+export async function deleteAvatarRow(id: string): Promise<void> {
+  await query("DELETE FROM avatars WHERE id = $1", [id]);
+}
+
+/** Whether an avatar has been taken down. */
+export async function isSuspended(id: string): Promise<boolean> {
+  return !!(await one("SELECT 1 FROM avatars WHERE id = $1 AND data->'suspended' IS NOT NULL", [id]));
+}
+
+/** Avatars that have been taken down, newest first. */
+export async function suspendedAvatars(): Promise<AvatarRecord[]> {
+  const rows = await query<Row>(`SELECT ${COLUMNS} FROM avatars WHERE data->'suspended' IS NOT NULL ORDER BY updated_at DESC LIMIT 100`);
+  return rows.map((row) => normalizeRecord(row.data));
 }
 
 export async function avatarsOwnedBy(userId: string): Promise<AvatarRecord[]> {

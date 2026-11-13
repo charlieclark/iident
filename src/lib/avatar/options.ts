@@ -12,7 +12,7 @@ import { z } from "zod";
  */
 
 /**
- * The one look every iident character shares: an animated film character
+ * The one look every Twiins character shares: an animated film character
  * with natural proportions. This is the look the product started with.
  * Later looks traded it for a higher measured face likeness and ended up
  * with a near-photographic face (uncomfortable on a stylized body, and

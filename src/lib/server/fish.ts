@@ -12,7 +12,7 @@ import { wholeSamples } from "./pcm";
  * - model: the recording is saved once as a private "fast" voice model and
  *   referenced by id. Fish caps how many models the API can create by the
  *   account's prepaid credit. A model is only a cache of the recording
- *   iident keeps, so one that goes missing is rebuilt from it.
+ *   Twiins keeps, so one that goes missing is rebuilt from it.
  */
 
 const API = "https://api.fish.audio";

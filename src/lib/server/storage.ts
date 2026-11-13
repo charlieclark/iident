@@ -1,5 +1,5 @@
 import "server-only";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { config } from "./config";
 
@@ -29,6 +29,8 @@ export type StoredFile = { body: ReadableStream<Uint8Array> | Uint8Array; size: 
 type Driver = {
   put(key: string, data: Uint8Array, contentType: string): Promise<void>;
   open(key: string): Promise<StoredFile | null>;
+  /** Removes every file stored under one avatar. */
+  removeAll(avatarId: string): Promise<void>;
 };
 
 const localPath = (key: string) => path.join(config.dataDir, "files", ...key.split("/"));
@@ -47,6 +49,9 @@ const local: Driver = {
       return null;
     }
   },
+  async removeAll(avatarId) {
+    await rm(path.join(config.dataDir, "files", avatarId), { recursive: true, force: true });
+  },
 };
 
 /** Files are never changed once written, so the store may cache them for as long as it likes. */
@@ -64,6 +69,15 @@ const blob: Driver = {
     if (!found || found.statusCode !== 200 || !found.stream) return null;
     return { body: found.stream, size: found.blob.size };
   },
+  async removeAll(avatarId) {
+    const { list, del } = await import("@vercel/blob");
+    let cursor: string | undefined;
+    do {
+      const page = await list({ prefix: `${blobPath(avatarId)}/`, cursor });
+      if (page.blobs.length) await del(page.blobs.map((b) => b.url));
+      cursor = page.hasMore ? page.cursor : undefined;
+    } while (cursor);
+  },
 };
 
 /** A Blob store is connected when Vercel provides its id (signed in through OIDC) or a read-write token. */
@@ -79,6 +93,12 @@ export async function putFile(avatarId: string, name: string, data: Uint8Array |
   const key = checkKey(`${avatarId}/${name}`);
   await driver().put(key, data, contentTypeFor(key));
   return key;
+}
+
+/** Removes everything stored for an avatar: selfie, portrait, character images, voice recording, model. */
+export async function deleteFiles(avatarId: string): Promise<void> {
+  if (!SAFE_NAME.test(avatarId)) throw new Error(`Invalid avatar id: ${avatarId}`);
+  await driver().removeAll(avatarId);
 }
 
 /** Opens a stored file for sending on, without holding all of it in memory where the store can stream. */

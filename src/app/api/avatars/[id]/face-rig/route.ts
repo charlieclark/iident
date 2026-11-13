@@ -2,7 +2,7 @@ import sharp from "sharp";
 import { z } from "zod";
 import { updateAvatar } from "@/lib/server/db";
 import { HttpError, handle, ownerView, requireOwner } from "@/lib/server/http";
-import { putFile } from "@/lib/server/storage";
+import { saveFile } from "@/lib/server/avatarFiles";
 
 const vec = z.tuple([z.number(), z.number(), z.number()]);
 const eye = z.object({
@@ -72,7 +72,7 @@ export const PUT = handle(async (req: Request, ctx: RouteContext<"/api/avatars/[
       .composite([{ input: avatarLayer }])
       .webp({ quality: 86 })
       .toBuffer();
-    thumbKey = await putFile(id, `thumb-${Date.now().toString(36)}.webp`, webp);
+    thumbKey = await saveFile(id, `thumb-${Date.now().toString(36)}.webp`, webp);
   }
   const updated = await updateAvatar(id, (r) => {
     r.faceRig = parsed.data.rig;

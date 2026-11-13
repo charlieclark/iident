@@ -102,6 +102,64 @@ describe("3D build", () => {
     expect(results.filter((r) => r.finish)).toHaveLength(1);
   });
 
+  it("emails the owner when the build ends, since they may have closed the page", async () => {
+    const auth = await import("../auth");
+    const owner = (await auth.consumeLoginToken((await auth.createLoginToken("builder@example.com"))!))!;
+    const sent: { to: string[]; subject: string; text: string }[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      sent.push(JSON.parse(String(init.body)));
+      return new Response("{}", { status: 200 });
+    });
+    config.email.resendKey = "re_placeholder";
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const owned = async () => {
+        const { record } = await db.createAvatar(owner.id);
+        await db.updateAvatar(record.id, (r) => {
+          r.persona.name = "Marco";
+          r.concepts = [{ id: "c1", url: "https://fal.example/character.png", file: `${record.id}/concept-c1.png`, prompt: "", kind: "final", createdAt: 1 }];
+        });
+        return record.id;
+      };
+      const good = await owned();
+      await jobs.startModelJob(good, "c1", 1.7);
+      fal.meshResult.mockResolvedValue({ glbUrl: "https://fal.example/mesh.glb" });
+      await advance(good);
+      fal.rigResult.mockResolvedValue(rigged);
+      await (await advance(good)).finish!();
+      expect(sent).toHaveLength(1);
+      expect(sent[0]).toMatchObject({ to: ["builder@example.com"], subject: "Marco is ready" });
+      expect(sent[0].text).toContain(`http://localhost:3000/create?id=${good}`);
+      // Looking at it again sends nothing more.
+      await advance(good);
+      expect(sent).toHaveLength(1);
+
+      const bad = await owned();
+      await jobs.startModelJob(bad, "c1", 1.7);
+      fal.meshResult.mockRejectedValue(Object.assign(new Error("Unprocessable"), { status: 422, body: { detail: "No person found." } }));
+      expect((await advance(bad)).record.model!.status).toBe("failed");
+      await advance(bad);
+      expect(sent).toHaveLength(2);
+      expect(sent[1].to).toEqual(["builder@example.com"]);
+      expect(sent[1].text).toContain(`http://localhost:3000/create?id=${bad}`);
+
+      // An email that can't be sent doesn't undo the build.
+      vi.stubGlobal("fetch", async () => new Response("no", { status: 500 }));
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const third = await owned();
+      await jobs.startModelJob(third, "c1", 1.7);
+      fal.meshResult.mockResolvedValue({ glbUrl: "https://fal.example/mesh.glb" });
+      await advance(third);
+      await (await advance(third)).finish!();
+      expect((await load(third)).model!.status).toBe("ready");
+      warn.mockRestore();
+    } finally {
+      config.email.resendKey = undefined;
+      vi.unstubAllGlobals();
+      error.mockRestore();
+    }
+  });
+
   it("refuses a second build while one is under way", async () => {
     const id = await draft();
     await jobs.startModelJob(id, "c1", 1.7);
@@ -161,10 +219,10 @@ describe("3D build", () => {
 
   it("asks the 3D service to call back when the site has a public address", async () => {
     const id = await draft();
-    config.appUrl = "https://iident.example";
+    config.appUrl = "https://twiins.example";
     const { record } = await jobs.startModelJob(id, "c1", 1.7);
     const hook = fal.submitMesh.mock.calls[0][1]!;
-    expect(hook).toBe(`https://iident.example/api/fal/webhook?avatar=${id}&key=${record.model!.hookKey}`);
+    expect(hook).toBe(`https://twiins.example/api/fal/webhook?avatar=${id}&key=${record.model!.hookKey}`);
     expect(record.model!.hookKey).toMatch(/^[\w-]{20,}$/);
   });
 });
