@@ -13,7 +13,6 @@ Where the product stands (November 2026), what it costs to run, how to charge fo
 | Final character (1 or 2 renders) | $0.04 to $0.08 | $0.042 each, fal price |
 | 3D mesh with textures | $1.20 | fal price for Meshy 7.1 |
 | Rig plus 8 animation clips | about $1.16 | Meshy's listed add-ons ($0.20 rig, $0.12 a clip); the rigging endpoint doesn't publish its own price |
-| Voice clone | under $0.01 | one transcription; Fish stores nothing |
 
 Every rebuild in 3D costs the $2.36 again. Sketches and finals are cheap enough to give away.
 
@@ -22,22 +21,20 @@ Every rebuild in 3D costs the $2.36 again. Sketches and finals are cheap enough 
 | Part | Cost per reply | Notes |
 | --- | --- | --- |
 | Claude Opus 5.5, low effort | about $0.006 to $0.01 | Estimate: cached persona prompt, short history, about 60 spoken words. Not measured, no key in the build environment |
-| Speech, cloned voice (Fish) | about $0.004 | $15 per million bytes, about 250 characters |
-| Speech, stock voice (ElevenLabs v4 Turbo) | about $0.01 | $0.04 per 1,000 characters at overage rates |
+| Speech (ElevenLabs v4 Turbo) | about $0.01 | $0.04 per 1,000 characters at overage rates |
 
 So an avatar at the default cap of 300 replies a month costs $3 to $6 that month at most. Most avatars will use far less.
 
 **Levers if margins matter**
 
 - Chat model: Claude Haiku 5.5 would cut the model part of a reply to a fraction of a cent, leaving speech as the main cost. Quality for short persona chat is probably fine, but it should be tested with real conversations first. `AVATAR_CHAT_MODEL` switches it.
-- Stock voices on Fish instead of ElevenLabs would cut their speech cost by more than half.
 - Fewer animation clips: each costs $0.12 per build.
 
 ## What is in place for charging
 
 - **Metering** (`src/lib/server/usage.ts`): replies to visitors are counted per avatar per calendar month, with a running total. Owner previews and greetings are free.
 - **A cap** (`MONTHLY_REPLY_LIMIT`, default 300, 0 for none): past it the avatar answers in text only, with no model call or speech, until the next month. The owner sees the count on the share step.
-- **Voice cloning switch** (`VOICE_CLONING=off`).
+- **No voice cloning.** Avatars speak in ElevenLabs' ready-made voices, so there is no per-avatar voice to pay for or store.
 
 - **Accounts** (`src/lib/server/auth.ts`): sign-in by email link, avatars owned by an account and listed at `/me`, browser drafts attached on sign-in.
 - **Plans and payments** (`src/lib/billing/plans.ts`, `src/lib/server/billing.ts`): Free, Creator and Pro; Stripe Checkout, billing portal and webhook; the paywall at the 3D build and at publishing; replies, live avatars and builds limited by plan. Off until `STRIPE_SECRET_KEY` is set.

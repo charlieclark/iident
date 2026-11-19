@@ -27,7 +27,10 @@ type StoredRecord = Omit<AvatarRecord, "persona" | "context"> & {
  */
 export function normalizeRecord(stored: StoredRecord): AvatarRecord {
   const { knowledge, ...persona } = stored.persona;
-  return { ...stored, persona, context: stored.context ?? { ...EMPTY_CONTEXT, knowledge: knowledge ?? "" } };
+  // An avatar that spoke with a clone of its creator's voice, from before cloning was removed, has no voice picked.
+  const { voice, ...rest } = stored;
+  const cloned = (voice as { mode?: string } | undefined)?.mode === "clone";
+  return { ...rest, ...(voice && !cloned ? { voice: { provider: voice.provider, voiceId: voice.voiceId, createdAt: voice.createdAt } } : {}), persona, context: stored.context ?? { ...EMPTY_CONTEXT, knowledge: knowledge ?? "" } };
 }
 
 /**

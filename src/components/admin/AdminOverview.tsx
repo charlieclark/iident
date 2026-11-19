@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Button, Card, Logo, Notice, Spinner } from "@/components/ui";
 import { api, ApiError, type AdminAction, type AdminOverview as Overview } from "@/lib/client/api";
+import { RETENTION } from "@/lib/retention";
 
 const STEP_LABELS: Record<string, string> = {
   signed_up: "Signed up",
@@ -177,6 +178,10 @@ export function AdminOverview() {
         </Card>
         <p className="mt-3 text-sm text-ink-600">
           3D builds in the last 30 days: {data.builds.started} started, {data.builds.ready} finished, {data.builds.failed} failed.
+        </p>
+        <p className="mt-1 text-sm text-ink-600">
+          Unused accounts in the last 30 days: {data.inactive.warned} warned, {data.inactive.deleted} deleted. An account with no plan is deleted after{" "}
+          {RETENTION.inactiveMonths} months without a sign-in, {RETENTION.warningDays} days after its owner is told.
         </p>
       </section>
 

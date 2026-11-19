@@ -13,6 +13,9 @@ vi.mock("../fal", () => ({
   meshResult: (...a: Parameters<typeof fal.meshResult>) => fal.meshResult(...a),
   submitRig: (...a: Parameters<typeof fal.submitRig>) => fal.submitRig(...a),
   rigResult: (...a: Parameters<typeof fal.rigResult>) => fal.rigResult(...a),
+  FAL_KEEPS_MS: 24 * 60 * 60 * 1000,
+  uploadToFal: async (_data: Uint8Array, _type: string, name: string) => `https://fal.example/again/${name}`,
+  deleteAtFal: async () => {},
 }));
 const mergeCharacter = vi.fn(async () => ({ glb: new Uint8Array([1, 2, 3]), clips: ["idle", "wave"] }));
 vi.mock("../glb", () => ({ mergeCharacter: () => mergeCharacter() }));
@@ -182,6 +185,26 @@ describe("3D build", () => {
     expect(retry.record.model).toMatchObject({ status: "rigging", meshReused: true });
     expect(fal.submitMesh).toHaveBeenCalledTimes(1);
     expect(fal.submitRig).toHaveBeenCalledTimes(2);
+    error.mockRestore();
+  });
+
+  it("sculpts again on a retry that comes after the 3D service has dropped the mesh", async () => {
+    const id = await draft();
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    await jobs.startModelJob(id, "c1", 1.7);
+    fal.meshResult.mockResolvedValue({ glbUrl: "https://fal.example/mesh.glb" });
+    await advance(id);
+    fal.rigResult.mockRejectedValue(Object.assign(new Error("Unprocessable"), { status: 422, body: { detail: "No humanoid." } }));
+    await advance(id);
+    // The retry comes two days later: the mesh was only kept for one.
+    await db.updateAvatar(id, (r) => {
+      r.model!.startedAt -= 2 * 24 * 60 * 60 * 1000;
+    });
+    fal.meshResult.mockResolvedValue(null);
+    const retry = await jobs.startModelJob(id, "c1", 1.7);
+    expect(retry.record.model!.status).toBe("sculpting");
+    expect(retry.record.model!.meshReused).toBeUndefined();
+    expect(fal.submitMesh).toHaveBeenCalledTimes(2);
     error.mockRestore();
   });
 

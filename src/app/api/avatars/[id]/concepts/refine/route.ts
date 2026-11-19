@@ -9,6 +9,7 @@ import { HttpError, handle, ownerView, rateLimit, requireOwner } from "@/lib/ser
 import { ensurePortrait } from "@/lib/server/portrait";
 import { download } from "@/lib/server/storage";
 import { saveFile } from "@/lib/server/avatarFiles";
+import { falLink, rememberFalLink } from "@/lib/server/falLinks";
 
 /** Drawing takes 15 to 45 seconds. */
 export const maxDuration = 300;
@@ -33,10 +34,11 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
   const prompt = buildRefinePrompt(parsed.data.instruction);
   // The result is always a final render, with the selfie alongside to keep the face true.
   // The clean portrait is the better picture of the person; the selfie stands in if there isn't one.
-  const person = (await ensurePortrait(id)) ?? record.selfie.url;
-  const url = await generateCharacterImage({ engine: "main", imageUrls: [base.url, person], prompt });
+  const person = (await ensurePortrait(id)) ?? (await falLink(record.selfie.file, record.selfie.url));
+  const url = await generateCharacterImage({ engine: "main", imageUrls: [await falLink(base.file, base.url), person], prompt });
   const cid = randomBytes(6).toString("base64url");
   const file = await saveFile(id, `concept-${cid}.png`, await download(url));
+  await rememberFalLink(file, url);
   const concept: Concept = {
     id: cid,
     url,

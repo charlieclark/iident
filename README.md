@@ -1,6 +1,6 @@
 # Aliike
 
-Turn a selfie and a short voice recording into a **talking 3D avatar** of yourself, give it a persona and the things it should know and show, and share one link that anyone can open to chat with it by voice or text. While it talks, the avatar can put your links, products, videos and images on screen as cards.
+Turn a selfie into a **talking 3D avatar** of yourself, pick its voice, give it a persona and the things it should know and show, and share one link that anyone can open to chat with it by voice or text. While it talks, the avatar can put your links, products, videos and images on screen as cards.
 
 The avatar's context (knowledge plus a catalog of items) is generic, so other products can embed it: see [docs/platform.md](docs/platform.md) for the platform design and the plan to replace Liinks' AI Chat with it.
 
@@ -8,7 +8,7 @@ The avatar's context (knowledge plus a catalog of items) is generic, so other pr
 selfie ──► character sheet ──► textured 3D mesh ──► rigged GLB + 8 animation clips
           (Nano Banana 2.1)      (Meshy 7.1, A-pose)   (Meshy auto-rig, merged + compressed)
                                                               │
-voice sample ──► voice clone (Fish Audio, no slot limits)     ▼
+picked voice (one of ElevenLabs' ready-made voices)           ▼
 persona ───────► system prompt ──► Claude ──► sentence chunks ──► streaming TTS ──► lip-synced avatar
 context ───────┘                     └──► show_items(ids) ──► cards on screen
 ```
@@ -36,7 +36,7 @@ The models and style were chosen in a measured bake-off: see [docs/character-pip
 
 All of it lives in bind-pose geometry space, so it follows the head through every animation. The landmarks are stored with the avatar, so visitors never load MediaPipe.
 
-**5. Voice and conversation.** The creator reads a short script (or picks one of ElevenLabs' stock voices). The recording is converted to WAV in the browser, kept, and transcribed once. Fish Audio then speaks straight from it: the recording and its transcript go with every speech request (`src/lib/server/fish.ts`), so nothing is stored at Fish and there is no limit on voices. `FISH_VOICE_MODE=model` saves the recording as a private Fish voice model instead, but Fish caps how many the API can create by the account's prepaid credit. A clone inherits the tone of its recording, so voice samples are captured without the browser's call-style noise suppression, a dull recording has its highs lifted before cloning (`src/lib/server/brighten.ts`), and Fish speech streams at 44.1 kHz. Clones made with another service move to Fish on first use, and a saved model that goes missing is rebuilt from the recording (`src/lib/server/voice.ts`). Each visitor message streams to Claude with a persona system prompt (`src/lib/server/persona.ts`). As soon as the first clause of the reply is written it goes to streaming TTS (Fish Audio for cloned voices, ElevenLabs for stock voices), and raw PCM audio is forwarded to the browser over server-sent events as it is generated. The browser schedules each chunk on the audio clock the moment it arrives (`src/lib/avatar/player.ts`), so the avatar starts talking a few hundred milliseconds after the text exists, while Claude is still writing. Later sentences are synthesized in order (ElevenLabs also gets the previous text, for natural intonation). Lip sync is driven from the audio itself (`src/lib/avatar/lipsync.ts`): loudness opens the jaw and the spectral centroid and hiss pick round, wide or closed shapes, so it works with any voice. Visitors can type or tap the mic (speech-to-text via Whisper on fal).
+**5. Voice and conversation.** The creator picks one of ElevenLabs' ready-made voices and can hear each say their greeting. Nobody's own voice is recorded or copied (`src/lib/server/voice.ts`). Each visitor message streams to Claude with a persona system prompt (`src/lib/server/persona.ts`). As soon as the first clause of the reply is written it goes to ElevenLabs' streaming TTS, and raw PCM audio is forwarded to the browser over server-sent events as it is generated. The browser schedules each chunk on the audio clock the moment it arrives (`src/lib/avatar/player.ts`), so the avatar starts talking a few hundred milliseconds after the text exists, while Claude is still writing. Later sentences are synthesized in order, each with the text spoken just before it, for natural intonation. Lip sync is driven from the audio itself (`src/lib/avatar/lipsync.ts`): loudness opens the jaw and the spectral centroid and hiss pick round, wide or closed shapes, so it works with any voice. Visitors can type or tap the mic (speech-to-text via Whisper on fal).
 
 **6. Showing things.** Next to the persona, the creator gives the avatar a context: free-text knowledge (facts, FAQs) and a catalog of items it can show, each a link, product, video or image with a stable id (`src/lib/avatar/context.ts`). The catalog goes into the system prompt and Claude gets one tool, `show_items`, which it calls with up to three ids after its spoken sentence. The server drops unknown ids and streams a `show` event with the cards, which appear under the reply while the avatar is still talking (`src/components/ItemCard.tsx`). YouTube, Vimeo and video files play inline, and the avatar stops talking when they do. The avatar has no other links, so it can't invent one.
 
@@ -58,9 +58,7 @@ Measured while building this, using the default models:
 | Final character (Nano Banana 2.1) | about 15 s |
 | 3D mesh + rig + 8 clips (Meshy) | 3 to 13 min, depending on queue load |
 | Speech-to-text (Whisper) | about 2.5 s |
-| Voice clone (Fish Audio: the recording is stored and transcribed) | a few seconds |
 | First audio of a reply (ElevenLabs v4 Turbo, streaming) | about 0.3 s after the text, about 0.65 s from click to sound in the browser |
-| First audio in a cloned voice (Fish Audio, recording sent with each request) | about 0.45 s after the text (an ElevenLabs clone of the same recording: about 0.27 s, measured side by side) |
 | First audio with the MiniMax fallback (whole clips via fal) | about 4 s |
 
 During the 3D build the creator keeps going (voice, persona) and sees a turntable of the sculpted mesh while it is being rigged.
@@ -85,7 +83,7 @@ npm run dev
 
 Open http://localhost:3000 and click **Create your avatar**.
 
-Without `ANTHROPIC_API_KEY` the avatar still talks, but replies with a setup hint instead of a real answer, or shows the item whose title best matches the visitor's words (handy for testing cards). Add `FISH_API_KEY` to clone voices with Fish Audio; without it, clones are made with ElevenLabs. Without `ELEVENLABS_API_KEY`, stock voices and speech fall back to MiniMax on fal (several seconds per sentence). Without `FAL_KEY`, generation endpoints return a clear 503.
+Without `ANTHROPIC_API_KEY` the avatar still talks, but replies with a setup hint instead of a real answer, or shows the item whose title best matches the visitor's words (handy for testing cards). Without `ELEVENLABS_API_KEY`, the voices and speech fall back to MiniMax on fal (several seconds per sentence), which is fine for development. Without `FAL_KEY`, generation endpoints return a clear 503.
 
 Data (the embedded Postgres and files) is written to `./data`. An older `data/app.db` (SQLite) is carried over into it the first time the app starts. To deploy, see [docs/deploying.md](docs/deploying.md).
 
@@ -125,7 +123,7 @@ src/
     api/chat/[slug]           SSE conversation: Claude text, streamed speech (PCM), cards to show
     api/voices                stock voices for the active speech provider
     api/stt                   visitor speech-to-text
-    api/files/[...key]        stored assets (selfies, voice samples and concepts are owner-only)
+    api/files/[...key]        stored assets (selfies and concepts are owner-only)
     api/fal/webhook           fal reports a finished 3D step here, so builds carry on unattended
     api/report                a visitor reports a published avatar
     api/admin/...             what /admin shows, and take down, restore, dismiss
@@ -136,15 +134,15 @@ src/
     AvatarChat.tsx            chat UI with push-to-talk
     ItemCard.tsx              cards for links, products, images and inline videos
   lib/avatar/                 options + prompt builder, context (knowledge + items), player, face rigger/driver, lip sync
-  lib/server/                 config, Postgres (pg, schema, db), storage (Vercel Blob or disk), fal wrappers, GLB merge, the 3D build (jobs), persona, speech (ElevenLabs, Fish Audio)
-  lib/client/                 API client, recorder + WAV encoder, SSE client, selfie checks
+  lib/server/                 config, Postgres (pg, schema, db), storage (Vercel Blob or disk), fal wrappers, GLB merge, the 3D build (jobs), persona, speech (ElevenLabs)
+  lib/client/                 API client, recorder (visitors' voice messages), SSE client, selfie checks
 ```
 
 ## Configuration
 
 All model choices are environment variables (see `.env.example`), so newer fal endpoints can be swapped in without code changes. The conversation model defaults to `claude-opus-5-5` with low effort for fast spoken replies and server-side refusal fallbacks enabled; set `AVATAR_CHAT_MODEL` to change it (for example to `claude-haiku-5-5` for lower latency and cost).
 
-Speech uses ElevenLabs whenever `ELEVENLABS_API_KEY` is set. `ELEVENLABS_MODEL` picks the model (default `eleven_v4_turbo`; `eleven_flash_v2_5` is a slightly faster, lower-fidelity alternative at the same price), and `TTS_PROVIDER=minimax` forces the fal fallback for stock voices. Cloned voices go to `CLONE_PROVIDER` (`fish`, `elevenlabs` or `minimax`; Fish by default when `FISH_API_KEY` is set), with `FISH_MODEL` (default `s2.1-pro`), `FISH_LATENCY` (default `balanced`), `FISH_SAMPLE_RATE` (default `44100`) and `FISH_VOICE_MODE` (`inline`, the default, or `model`). `VOICE_CLONING=off` switches cloning off.
+Speech uses ElevenLabs whenever `ELEVENLABS_API_KEY` is set. `ELEVENLABS_MODEL` picks the model (default `eleven_v4_turbo`; `eleven_flash_v2_5` is a slightly faster, lower-fidelity alternative at the same price), and `TTS_PROVIDER=minimax` forces the fal fallback.
 
 ## Plans and payments
 
@@ -161,21 +159,23 @@ Setting up Stripe: set `STRIPE_SECRET_KEY`; add a webhook endpoint at `/api/bill
 
 ## Safety and privacy
 
-- Creators must confirm the photo and voice are theirs, or used with permission, before upload or cloning.
-- A cloned voice is the easiest part of an avatar to misuse for impersonation, so cloning has an off switch (`VOICE_CLONING=off`): recordings are then refused, clones made earlier are never spoken, and avatars use stock voices. The persona prompt always tells the model whether it speaks with the person's own voice or a stock voice, so it never claims a stock voice is theirs.
+- Creators must confirm the photo is theirs, or used with permission, before upload.
+- Avatars speak in ready-made voices only. A person's voice is the easiest part of them to misuse for impersonation, so nobody's voice is recorded or cloned, and the persona prompt tells the model the voice is not the person's own, so it never claims it is.
 - The public page labels the avatar as an AI, and the persona prompt requires it to say so when asked, avoid commitments on the person's behalf, stick to the facts the creator provided and never share private contact, financial or health details.
-- Selfies, their clean portraits, voice samples and concept images are only served to the owner; the public page only exposes the 3D model and a thumbnail.
+- Selfies, their clean portraits and concept images are only served to the owner; the public page only exposes the 3D model and a thumbnail.
 - An avatar belongs to the account that created it, and can be edited by that account and by the browser that made it (a random edit token kept in that browser, also used in its private file links). Accounts sign in with a one-time email link (20 minutes, single use, 5 an hour per address) that starts a 60-day session in an httpOnly, SameSite=Lax cookie. Only hashes of edit tokens, link tokens and session tokens are stored. An avatar that belongs to an account can't be claimed by another one.
 - Per-IP rate limits (counted in the database, with the addresses hashed) protect the expensive endpoints, and each avatar has a monthly cap on replies to visitors (`MONTHLY_REPLY_LIMIT`, default 300): past it, the avatar answers in text only until the next month.
 
 ## Running the site
 
-- **Deleting.** A creator can delete an avatar from their account page: its row, every stored file (selfie, portrait, character images, model, voice recording) and its cloned voice go at once, and its page stops working. Deleting the account ends the plan at Stripe first, then removes every avatar, the sessions and the account; if the plan can't be ended, nothing is deleted, so nobody keeps paying for an account that is gone. A picture or model still being made when its avatar is deleted is thrown away when it arrives (`src/lib/server/avatarFiles.ts`). The 3D model and thumbnail are public and cached by Vercel's CDN for a year, so each is tagged with its avatar and the cached copies are dropped on deletion and on takedown; a browser that already loaded a model keeps its own copy.
-- **Reports and takedowns.** Every public avatar page has a Report link (impersonation, someone's photo or voice used without permission, harmful content, other). Reports are kept in the database and emailed to `ADMIN_EMAILS`. At `/admin` an owner of the site can dismiss a report or take the avatar down: its page and conversation return 404 at once, its 3D model and other files can only be loaded by its creator, the creator sees "Taken down" and can't publish it again, and it can be restored. `/admin` and its API answer 404 to everyone else.
+- **Deleting.** A creator can delete an avatar from their account page: its row, every stored file (selfie, portrait, character images, model) goes at once, and its page stops working. Deleting the account ends the plan at Stripe first, then removes every avatar, the sessions and the account; if the plan can't be ended, nothing is deleted, so nobody keeps paying for an account that is gone. A picture or model still being made when its avatar is deleted is thrown away when it arrives (`src/lib/server/avatarFiles.ts`). The 3D model and thumbnail are public and cached by Vercel's CDN for a year, so each is tagged with its avatar and the cached copies are dropped on deletion and on takedown; a browser that already loaded a model keeps its own copy.
+- **Unused accounts.** An account with no paid plan that nobody has signed in to for 24 months is deleted with everything in it, 30 days after its owner is told by email; signing in at any point keeps it. The numbers are in `src/lib/retention.ts` and published on the Privacy page; the daily job is `sweepInactive` in `src/lib/server/retention.ts`, called by Vercel's scheduler (`vercel.json`, `/api/cron/retention`, `CRON_SECRET`). Nothing is deleted without the warning having been sent, so a site with no email service deletes nobody. `/admin` shows how many accounts were warned and deleted.
+- **Copies at the image service.** fal's models read the selfie and the pictures made from it out of fal's own file store. Those copies are set to expire after 24 hours (voice messages after one), fal keeps no record of requests that are collected at once, and deleting an avatar deletes its copies there straight away. When a later step needs a picture whose copy has expired, it is uploaded again from our storage (`src/lib/server/falLinks.ts`).
+- **Reports and takedowns.** Every public avatar page has a Report link (impersonation, someone's photo used without permission, harmful content, other). Reports are kept in the database and emailed to `ADMIN_EMAILS`. At `/admin` an owner of the site can dismiss a report or take the avatar down: its page and conversation return 404 at once, its 3D model and other files can only be loaded by its creator, the creator sees "Taken down" and can't publish it again, and it can be restored. `/admin` and its API answer 404 to everyone else.
 - **Numbers.** The app records the steps people take (signed up, uploaded a photo, previewed a look, created a character, opened checkout, started a plan, started a build, build finished, published) in its own `events` table, and `/admin` shows how many people reached each in the last day, week and 30 days. Nothing is sent to an analytics service and visitors to avatar pages aren't tracked. When an account is deleted its events stay countable under a random id.
 - **Errors.** Server errors (any 5xx from a route), failed builds and uncaught errors in people's browsers are written to the `errors` table and listed at `/admin`, newest first, for 30 days.
 - **Emails.** Besides the sign-in link: the creator is told when a 3D build finishes or fails (it takes minutes and they may have closed the page), and `ADMIN_EMAILS` are told about each report.
-- **Terms and Privacy.** `/terms` and `/privacy` are drafts written to match what the app does with photos, voices and conversations. They name the company, contact address and governing law from `NEXT_PUBLIC_LEGAL_NAME`, `NEXT_PUBLIC_CONTACT_EMAIL` and `NEXT_PUBLIC_LEGAL_JURISDICTION`. Have a lawyer read them before taking money.
+- **Terms and Privacy.** `/terms` and `/privacy` are drafts written to match what the app does with photos and conversations. They name the company, contact address and governing law from `NEXT_PUBLIC_LEGAL_NAME`, `NEXT_PUBLIC_CONTACT_EMAIL` and `NEXT_PUBLIC_LEGAL_JURISDICTION`. Have a lawyer read them before taking money.
 
 ## Production notes
 
@@ -183,8 +183,7 @@ Setting up Stripe: set `STRIPE_SECRET_KEY`; add a webhook endpoint at `/api/bill
 - **Long-running work.** A 3D build takes 4 to 13 minutes, so nothing waits for it. The two slow steps run in fal's queue and the avatar's record keeps their request ids; the build moves on one step at a time whenever the creator's page polls or fal calls back (`src/lib/server/jobs.ts`). Any server instance can pick it up, and a step is never submitted twice.
 - **Storage and database.** `src/lib/server/storage.ts` (Vercel Blob, or local disk in development) and `src/lib/server/db.ts` with `pg.ts` (Postgres) are small, isolated modules. Rate limits live in Postgres too, so they hold across instances.
 - **Accounts.** Sign-in emails go through Resend (`RESEND_API_KEY`, `EMAIL_FROM` on a domain verified there). Without a key, development shows the sign-in link on the page and production refuses to sign anyone in. Set `NEXT_PUBLIC_APP_URL` to the public https address: sign-in links are built from it and the session cookie is marked Secure when it is https.
-- **Costs.** Each avatar uses a clean portrait of the selfie at up to 4 cents, a starter character at about 4 cents, previews at under a cent each, one or two final renders at about 4 cents, one image-to-3D run, one rigging run and one voice clone; each reply uses one Claude call (two in the rare case it shows cards before saying anything) and one TTS call per sentence.
-- **Voice cloning at scale.** With `FISH_API_KEY` set, cloned voices are spoken by Fish Audio straight from the creator's recording, which goes with each request, so there is no voice limit and nothing to clean up at Fish. Saved Fish voice models (`FISH_VOICE_MODE=model`) skip re-sending the recording, but Fish caps how many the API can create by prepaid credit (an account with no credit can create none). Fish concurrency also depends on prepaid credit: 5 requests under $100, 15 from $100, 50 from $1,000. Clones made with ElevenLabs instead each take a voice slot for as long as the avatar exists (30 on Creator, 160 on Pro, 660 on Scale, 2,200 on Business, per ElevenLabs' pricing page in November 2026) and count against a monthly quota of new voices (95 on Creator). Stock voices use no slots, and re-recording or switching to a stock voice frees the old clone.
+- **Costs.** Each avatar uses a clean portrait of the selfie at up to 4 cents, a starter character at about 4 cents, previews at under a cent each, one or two final renders at about 4 cents, one image-to-3D run and one rigging run; each reply uses one Claude call (two in the rare case it shows cards before saying anything) and one TTS call per sentence.
 
 Costs, pricing options and what a new user still trips over are written up in [docs/go-to-market.md](docs/go-to-market.md).
 

@@ -22,7 +22,7 @@ export const STEPS = [
   "published",
 ] as const;
 
-export type EventName = (typeof STEPS)[number] | "build_failed" | "reported" | "avatar_deleted" | "account_deleted" | "taken_down";
+export type EventName = (typeof STEPS)[number] | "build_failed" | "reported" | "avatar_deleted" | "account_deleted" | "taken_down" | "inactive_warned" | "inactive_deleted";
 
 /** Records a step. Never throws: counting must not break the thing being counted. */
 export async function track(name: EventName, who: { userId?: string | null; avatarId?: string | null; props?: Record<string, unknown> } = {}): Promise<void> {
@@ -85,6 +85,16 @@ export async function buildCounts(now = Date.now()): Promise<{ started: number; 
   ]);
   const n = (name: string) => rows.find((r) => r.name === name)?.n ?? 0;
   return { started: n("build_started"), ready: n("build_ready"), failed: n("build_failed") };
+}
+
+/** Unused accounts over the last 30 days: how many were warned, and how many were deleted (see ./retention.ts). */
+export async function inactiveCounts(now = Date.now()): Promise<{ warned: number; deleted: number }> {
+  const rows = await query<{ name: string; n: number }>("SELECT name, COUNT(*)::int AS n FROM events WHERE at > $1 AND name = ANY($2) GROUP BY name", [
+    now - 30 * DAY,
+    ["inactive_warned", "inactive_deleted"],
+  ]);
+  const n = (name: string) => rows.find((r) => r.name === name)?.n ?? 0;
+  return { warned: n("inactive_warned"), deleted: n("inactive_deleted") };
 }
 
 export type LoggedError = { id: number; at: number; source: string; route: string | null; message: string; detail: string | null };

@@ -110,7 +110,7 @@ export function Pricing() {
         <div className="mx-auto max-w-2xl text-center">
           <h1 className="text-4xl font-semibold tracking-tight text-ink-900 sm:text-5xl">Design it free. Pay when it comes to life.</h1>
           <p className="mt-4 text-lg text-ink-600">
-            Turning a selfie into your character costs nothing. A plan builds it in 3D, gives it your voice and puts it on a link anyone can talk to.
+            Turning a selfie into your character costs nothing. A plan builds it in 3D, gives it a voice and puts it on a link anyone can talk to.
           </p>
         </div>
 

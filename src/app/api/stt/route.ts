@@ -19,7 +19,8 @@ export const POST = handle(async (req: Request) => {
       ["ogg", "ogg"],
       ["wav", "wav"],
     ].find(([needle]) => type.includes(needle))?.[1] ?? "webm";
-  const url = await uploadToFal(Buffer.from(await file.arrayBuffer()), type, `message.${ext}`);
+  // A visitor's voice message: fal keeps the recording for an hour at most, and no record of the request.
+  const url = await uploadToFal(Buffer.from(await file.arrayBuffer()), type, `message.${ext}`, "1h");
   const language = typeof form.get("language") === "string" ? String(form.get("language")) : undefined;
   const text = await transcribe(url, language || undefined);
   return Response.json({ text });

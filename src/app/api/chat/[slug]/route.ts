@@ -6,7 +6,7 @@ import { getAvatarBySlug, loadAvatar } from "@/lib/server/db";
 import { HttpError, handle, rateLimit } from "@/lib/server/http";
 import { SentenceChunker, sanitizeHistory, streamReply } from "@/lib/server/persona";
 import { countReply, isOver, limitMessage, replyAllowance } from "@/lib/server/usage";
-import { createSpeaker, greetingFor, usesClonedVoice } from "@/lib/server/voice";
+import { createSpeaker, greetingFor } from "@/lib/server/voice";
 
 const bodySchema = z.object({
   messages: z
@@ -82,7 +82,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/chat/[sl
         controller.close();
         return;
       }
-      const speaker = await createSpeaker(record, send, req.signal);
+      const speaker = createSpeaker(record, send, req.signal);
       const say = (text: string) => speaker.say(text);
 
       try {
@@ -101,7 +101,6 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/chat/[sl
           const reply = streamReply({
             persona: record.persona,
             context: record.context,
-            ownVoice: usesClonedVoice(record),
             history,
             signal: req.signal,
           });

@@ -82,4 +82,18 @@ export const MIGRATIONS: string[][] = [
     )`,
     `CREATE INDEX errors_at ON errors (at)`,
   ],
+  [
+    // When the account was last used, and when its owner was told it would be deleted for being unused
+    // (see ./retention.ts). Accounts from before this start counting from the day they were created.
+    `ALTER TABLE users ADD COLUMN last_seen_at BIGINT`,
+    `ALTER TABLE users ADD COLUMN retention_warned_at BIGINT`,
+    `UPDATE users SET last_seen_at = GREATEST(created_at, COALESCE((SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id = users.id), 0))`,
+    `CREATE INDEX users_last_seen ON users (last_seen_at)`,
+    // Where the image service currently holds a copy of one of our stored files, and until when (see ./falLinks.ts).
+    `CREATE TABLE fal_links (
+      file TEXT PRIMARY KEY,
+      url TEXT NOT NULL,
+      expires_at BIGINT NOT NULL
+    )`,
+  ],
 ];

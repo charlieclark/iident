@@ -7,7 +7,7 @@ import { updateAvatar } from "@/lib/server/db";
 import { HttpError, handle, ownerView, requireOwner } from "@/lib/server/http";
 import { advanceModelJob } from "@/lib/server/jobs";
 import { deleteAvatar } from "@/lib/server/removal";
-import { activeProvider, freeClone, presetVoices } from "@/lib/server/voice";
+import { activeProvider, presetVoices } from "@/lib/server/voice";
 
 /** Room for the final merge of a model, which runs after the response. */
 export const maxDuration = 300;
@@ -42,7 +42,7 @@ const patchSchema = z.object({
 
 export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/avatars/[id]">) => {
   const { id } = await ctx.params;
-  const previous = (await requireOwner(req, id)).voice;
+  await requireOwner(req, id);
   const parsed = patchSchema.safeParse(await req.json());
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
@@ -59,15 +59,13 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/avatars
     if (body.backdrop) r.backdrop = body.backdrop;
     if (body.consent !== undefined) r.consent = body.consent;
     if (body.voicePreset) {
-      r.voice = { mode: "preset", provider: activeProvider(), voiceId: body.voicePreset, createdAt: Date.now() };
+      r.voice = { provider: activeProvider(), voiceId: body.voicePreset, createdAt: Date.now() };
     }
   });
-  // Switching to a stock voice frees the old clone (and its ElevenLabs voice slot).
-  if (body.voicePreset) freeClone(previous);
   return Response.json({ avatar: await ownerView(record) });
 });
 
-/** Deletes the avatar and everything stored for it: photo, drawings, 3D model, voice recording and clone. */
+/** Deletes the avatar and everything stored for it: photo, drawings and 3D model. */
 export const DELETE = handle(async (req: Request, ctx: RouteContext<"/api/avatars/[id]">) => {
   const { id } = await ctx.params;
   await requireOwner(req, id);

@@ -12,6 +12,7 @@ import { ensurePortrait } from "@/lib/server/portrait";
 import { ensureStarter } from "@/lib/server/starter";
 import { download } from "@/lib/server/storage";
 import { saveFile } from "@/lib/server/avatarFiles";
+import { falLink, rememberFalLink } from "@/lib/server/falLinks";
 
 /** Drawing takes 15 to 45 seconds, after a wait for the portrait when the selfie is new. */
 export const maxDuration = 300;
@@ -59,16 +60,15 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
   // Drawn from the selfie's clean portrait and the selfie together; from the selfie alone if the portrait could not be made.
   const portrait = base ? null : await ensurePortrait(id);
   const prompt = base ? buildSketchEditPrompt(appearance) : buildConceptPrompt(appearance, { portrait: !!portrait });
+  // The models read their pictures from fal's copies, which expire; a fresh one is uploaded when needed.
+  const photo = base ? null : await falLink(record.selfie.file, record.selfie.url);
   const url = base
-    ? await generateCharacterImage({ engine: "sketch", imageUrls: [base.url], prompt })
-    : await generateCharacterImage({
-        engine: "main",
-        imageUrls: portrait ? [portrait, record.selfie.url] : [record.selfie.url],
-        prompt,
-      });
+    ? await generateCharacterImage({ engine: "sketch", imageUrls: [await falLink(base.file, base.url)], prompt })
+    : await generateCharacterImage({ engine: "main", imageUrls: portrait ? [portrait, photo!] : [photo!], prompt });
   const cid = randomBytes(6).toString("base64url");
   const image = await download(url);
   const file = await saveFile(id, `concept-${cid}.${base ? "jpg" : "png"}`, image);
+  await rememberFalLink(file, url);
   const concept: Concept = {
     id: cid,
     url,

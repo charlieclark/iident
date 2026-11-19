@@ -28,7 +28,6 @@ export const config = {
   falKey: env("FAL_KEY"),
   anthropicKey: env("ANTHROPIC_API_KEY"),
   elevenLabsKey: env("ELEVENLABS_API_KEY"),
-  fishKey: env("FISH_API_KEY"),
 
   /**
    * Sign-in emails go through Resend when a key is set. Without one (local
@@ -72,43 +71,22 @@ export const config = {
     .filter(Boolean),
 
   /**
-   * Speech providers.
-   * - `provider` speaks stock voices. ElevenLabs streams audio (first sound in
-   *   ~250 ms) and is used whenever a key is set; MiniMax on fal is the
-   *   fallback, which returns whole clips through fal's queue.
-   * - `cloneProvider` holds and speaks cloned voices. Fish Audio is preferred
-   *   when its key is set: it has no voice slots, where every ElevenLabs clone
-   *   takes one (30 on the Creator plan) plus a monthly quota of new clones.
+   * The secret Vercel sends with scheduled calls (Authorization: Bearer ...).
+   * Without it the scheduled jobs refuse to run, so nobody else can start them.
+   */
+  cronSecret: env("CRON_SECRET"),
+
+  /**
+   * Speech. ElevenLabs streams audio (first sound in ~250 ms) and is used
+   * whenever a key is set. Without one (development), MiniMax on fal speaks
+   * instead, returning whole clips through fal's queue.
    */
   tts: {
     provider: (env("TTS_PROVIDER") ?? (env("ELEVENLABS_API_KEY") ? "elevenlabs" : "minimax")) as
       | "elevenlabs"
       | "minimax",
-    cloneProvider: (env("CLONE_PROVIDER") ??
-      (env("FISH_API_KEY") ? "fish" : env("ELEVENLABS_API_KEY") ? "elevenlabs" : "minimax")) as
-      | "fish"
-      | "elevenlabs"
-      | "minimax",
     elevenLabsModel: env("ELEVENLABS_MODEL", "eleven_v4_turbo")!,
-    fishModel: env("FISH_MODEL", "s2.1-pro")!,
-    /**
-     * "inline" sends the creator's recording with every request, so nothing
-     * is stored at Fish and there is no limit. "model" saves it once as a
-     * private voice model; Fish caps API-created models by prepaid credit.
-     */
-    fishVoiceMode: env("FISH_VOICE_MODE", "inline") as "inline" | "model",
-    /** "balanced" favors time to first audio; "normal" favors stability. */
-    fishLatency: env("FISH_LATENCY", "balanced")!,
-    /** Fish output rate. 44.1 kHz carries the highs above 12 kHz that a 24 kHz stream cuts off. */
-    fishSampleRate: Number(env("FISH_SAMPLE_RATE", "44100")),
   },
-
-  /**
-   * Cloning a creator's voice from a recording. On unless VOICE_CLONING=off,
-   * a switch for turning it off quickly: then avatars speak with stock
-   * voices, recordings are refused and existing clones are never spoken.
-   */
-  voiceCloning: env("VOICE_CLONING") !== "off",
 
   limits: {
     /**
@@ -150,7 +128,6 @@ export const config = {
     imageTo3d: env("FAL_IMAGE_TO_3D_MODEL", "meshy/v7.1/image-to-3d")!,
     /** Mesh -> humanoid rig + animation clips. */
     rigging: env("FAL_RIGGING_MODEL", "fal-ai/meshy/rigging/multi-animation")!,
-    voiceClone: env("FAL_VOICE_CLONE_MODEL", "fal-ai/minimax/voice-clone")!,
     tts: env("FAL_TTS_MODEL", "fal-ai/minimax/speech-2.8-turbo")!,
     stt: env("FAL_STT_MODEL", "fal-ai/wizper")!,
     /** Claude model for the persona's conversation. */

@@ -5,6 +5,7 @@ import { getAvatar, updateAvatar } from "./db";
 import { generatePortrait } from "./fal";
 import { download } from "./storage";
 import { saveFile } from "./avatarFiles";
+import { falLink, rememberFalLink } from "./falLinks";
 
 /**
  * The clean portrait a character is drawn from: made once per selfie, in the
@@ -30,7 +31,7 @@ type Selfie = NonNullable<AvatarRecord["selfie"]>;
 export async function ensurePortrait(avatarId: string): Promise<string | null> {
   const first = (await getAvatar(avatarId))?.selfie;
   if (!first) return null;
-  if (first.portrait) return first.portrait.url;
+  if (first.portrait) return link(first.portrait);
 
   const deadline = Date.now() + CLAIM_MS;
   for (let waited = false; ; waited = true) {
@@ -48,17 +49,21 @@ export async function ensurePortrait(avatarId: string): Promise<string | null> {
       })
     ).selfie;
     if (!selfie) return null;
-    if (selfie.portrait) return selfie.portrait.url;
+    if (selfie.portrait) return link(selfie.portrait);
     if (mine) return make(avatarId, selfie);
     if (!selfie.portraitClaimedAt || Date.now() > deadline) return null;
     await new Promise((r) => setTimeout(r, WAIT_STEP_MS));
   }
 }
 
+/** A link the image model can read the portrait from (fal's copy expires; ours doesn't). */
+const link = (portrait: { file: string; url: string }) => falLink(portrait.file, portrait.url).catch(() => null);
+
 async function make(avatarId: string, selfie: Selfie): Promise<string | null> {
   try {
-    const url = await generatePortrait(selfie.url, PORTRAIT_PROMPT);
+    const url = await generatePortrait(await falLink(selfie.file, selfie.url), PORTRAIT_PROMPT);
     const file = await saveFile(avatarId, `portrait-${Date.now().toString(36)}.png`, await download(url));
+    await rememberFalLink(file, url);
     await updateAvatar(avatarId, (r) => {
       // A newer selfie may have arrived while this one was being redrawn.
       if (r.selfie?.file !== selfie.file) return false;

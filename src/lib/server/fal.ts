@@ -18,19 +18,41 @@ function fal(): FalClient {
 
 type FalFile = { url: string; content_type?: string; file_size?: number | null };
 
+/**
+ * How long fal keeps a file we upload and a result it makes, instead of its
+ * default of keeping them. Each is only needed by the next step, minutes
+ * later; the copies that last are the ones in our own storage. A step that
+ * comes later than this gets a fresh upload (see ./falLinks.ts).
+ */
+export const FAL_KEEPS_MS = 24 * 60 * 60 * 1000;
+const storageSettings = { expiresIn: "1d" } as const;
+
 async function run<T>(
   endpoint: string,
   input: Record<string, unknown>,
   opts: { pollInterval?: number } = {},
 ): Promise<T> {
-  const result = await fal().subscribe(endpoint, { input, pollInterval: opts.pollInterval ?? 1000 });
+  // The result is collected here and now, so fal has no need to keep the request (it would for 90 days).
+  const result = await fal().subscribe(endpoint, { input, pollInterval: opts.pollInterval ?? 1000, storageSettings, headers: { "X-Fal-Store-IO": "0" } });
   return result.data as T;
 }
 
-export async function uploadToFal(data: Uint8Array | Buffer, contentType: string, name: string) {
+/** Gives fal a file to work on and returns its link there. `expiresIn` is how long fal keeps it. */
+export async function uploadToFal(data: Uint8Array | Buffer, contentType: string, name: string, expiresIn: "1h" | "1d" = storageSettings.expiresIn) {
   const blob = new Blob([new Uint8Array(data)], { type: contentType });
   const file = new File([blob], name, { type: contentType });
-  return fal().storage.upload(file);
+  return fal().storage.upload(file, { lifecycle: { expiresIn } });
+}
+
+/** Deletes a file fal holds (an upload or a result), by its link. Files expire by themselves; this is for deleting sooner. */
+export async function deleteAtFal(url: string): Promise<void> {
+  requireFal();
+  const res = await fetch("https://rest.fal.ai/storage/files/delete", {
+    method: "POST",
+    headers: { authorization: `Key ${config.falKey}`, "content-type": "application/json" },
+    body: JSON.stringify({ file_url: url }),
+  });
+  if (!res.ok && res.status !== 404) throw new Error(`fal would not delete a file (${res.status})`);
 }
 
 /** Each image model family takes its size and quality settings differently. */
@@ -103,7 +125,9 @@ export async function generateBackdrop(prompt: string): Promise<string> {
  * running and throws if it failed.
  */
 async function submit(endpoint: string, input: Record<string, unknown>, webhookUrl?: string): Promise<string> {
-  const { request_id } = await fal().queue.submit(endpoint, { input, webhookUrl });
+  // Unlike `run`, these keep fal's record of the request: the result is collected minutes later, perhaps
+  // by another server instance. The record holds links to files (which expire) and settings, no pictures.
+  const { request_id } = await fal().queue.submit(endpoint, { input, webhookUrl, storageSettings });
   return request_id;
 }
 
@@ -179,7 +203,7 @@ export async function rigResult(requestId: string): Promise<{ riggedGlbUrl: stri
   return { riggedGlbUrl: out.rigged_character_glb.url, clips };
 }
 
-/** Preset voices available without cloning (MiniMax system voices). */
+/** MiniMax's ready-made voices, offered when ElevenLabs isn't set up. */
 export const PRESET_VOICES = [
   { id: "Friendly_Person", label: "Friendly" },
   { id: "Calm_Woman", label: "Calm (female)" },
@@ -191,21 +215,6 @@ export const PRESET_VOICES = [
   { id: "Inspirational_girl", label: "Inspiring (female)" },
   { id: "Elegant_Man", label: "Elegant (male)" },
 ] as const;
-
-export async function cloneVoice(params: {
-  audioUrl: string;
-  previewText: string;
-}): Promise<{ voiceId: string; previewUrl?: string }> {
-  const out = await run<{ custom_voice_id: string; audio?: FalFile | null }>(config.models.voiceClone, {
-    audio_url: params.audioUrl,
-    text: params.previewText.slice(0, 900),
-    model: "speech-02-turbo",
-    noise_reduction: true,
-    need_volume_normalization: true,
-  });
-  if (!out.custom_voice_id) throw new Error("Voice cloning returned no voice id");
-  return { voiceId: out.custom_voice_id, previewUrl: out.audio?.url };
-}
 
 export async function speak(params: {
   text: string;

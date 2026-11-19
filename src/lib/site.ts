@@ -12,5 +12,5 @@ export const SITE = {
   /** Whose law the Terms are under, e.g. "the State of California, USA". */
   jurisdiction: process.env.NEXT_PUBLIC_LEGAL_JURISDICTION?.trim() || "",
   /** When the Terms and the Privacy page last changed. */
-  legalUpdated: "November 13, 2026",
+  legalUpdated: "November 19, 2026",
 };

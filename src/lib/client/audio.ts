@@ -10,15 +10,9 @@ export class Recorder {
   private data = new Float32Array(1024);
   startedAt = 0;
 
-  constructor(private quality: "speech" | "voice-sample" = "speech") {}
-
   async start() {
-    // Call-style processing (noise suppression, echo cancellation) dulls the
-    // highs, and a voice clone inherits that. Voice samples are captured raw
-    // (levels are normalized in toWav); push-to-talk keeps the processing.
-    const raw = this.quality === "voice-sample";
     this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: !raw, noiseSuppression: !raw, autoGainControl: !raw, channelCount: 1 },
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
     });
     const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find((t) => MediaRecorder.isTypeSupported(t));
     this.recorder = new MediaRecorder(this.stream, mime ? { mimeType: mime } : undefined);
@@ -71,56 +65,5 @@ export class Recorder {
     this.ctx = null;
     this.analyser = null;
     this.startedAt = 0;
-  }
-}
-
-/**
- * The longest voice sample that is kept. Cloning needs 15 to 30 seconds, and
- * the upload has to fit in one serverless request (4.5 MB): 75 seconds of
- * 24 kHz mono is 3.6 MB.
- */
-export const MAX_SAMPLE_SECONDS = 75;
-
-/**
- * Converts any browser-decodable recording (webm/opus, mp4/aac, ...) into a
- * mono 16-bit WAV, the most widely accepted format for voice cloning.
- */
-export async function toWav(blob: Blob, sampleRate = 24000, maxSeconds = MAX_SAMPLE_SECONDS): Promise<{ wav: Blob; seconds: number }> {
-  const ctx = new AudioContext();
-  try {
-    const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
-    const offline = new OfflineAudioContext(1, Math.ceil(Math.min(decoded.duration, maxSeconds) * sampleRate), sampleRate);
-    const src = offline.createBufferSource();
-    src.buffer = decoded;
-    src.connect(offline.destination);
-    src.start();
-    const rendered = await offline.startRendering();
-    const pcm = rendered.getChannelData(0);
-    const buffer = new ArrayBuffer(44 + pcm.length * 2);
-    const view = new DataView(buffer);
-    const write = (o: number, s: string) => [...s].forEach((c, i) => view.setUint8(o + i, c.charCodeAt(0)));
-    write(0, "RIFF");
-    view.setUint32(4, 36 + pcm.length * 2, true);
-    write(8, "WAVE");
-    write(12, "fmt ");
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, 1, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * 2, true);
-    view.setUint16(32, 2, true);
-    view.setUint16(34, 16, true);
-    write(36, "data");
-    view.setUint32(40, pcm.length * 2, true);
-    let peak = 0;
-    for (const v of pcm) peak = Math.max(peak, Math.abs(v));
-    const gain = peak > 0 ? Math.min(4, 0.9 / peak) : 1;
-    for (let i = 0; i < pcm.length; i++) {
-      const s = Math.max(-1, Math.min(1, pcm[i] * gain));
-      view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-    }
-    return { wav: new Blob([buffer], { type: "audio/wav" }), seconds: rendered.duration };
-  } finally {
-    ctx.close().catch(() => {});
   }
 }

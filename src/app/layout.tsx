@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(config.appUrl),
   title: { default: "Aliike · Your talking 3D avatar", template: "%s · Aliike" },
   description:
-    "Turn a selfie and a voice recording into a talking 3D avatar with your look, your voice and your personality. Share one link; anyone can chat with it.",
+    "Turn a selfie into a talking 3D avatar with your look, a voice you pick and your personality. Share one link; anyone can chat with it.",
   openGraph: { siteName: "Aliike", type: "website" },
 };
 

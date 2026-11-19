@@ -8,6 +8,7 @@ import { generateCharacterImage } from "./fal";
 import { ensurePortrait } from "./portrait";
 import { download } from "./storage";
 import { saveFile } from "./avatarFiles";
+import { falLink, rememberFalLink } from "./falLinks";
 
 /**
  * The starter character: the first picture of a person, in the look they
@@ -66,9 +67,11 @@ async function draw(avatarId: string, record: AvatarRecord, selfie: Selfie): Pro
     // Drawn from the selfie's clean portrait and the selfie together; from the selfie alone if the portrait could not be made.
     const portrait = await ensurePortrait(avatarId);
     const prompt = buildConceptPrompt(record.appearance, { portrait: !!portrait });
-    const url = await generateCharacterImage({ engine: "main", imageUrls: portrait ? [portrait, selfie.url] : [selfie.url], prompt });
+    const photo = await falLink(selfie.file, selfie.url);
+    const url = await generateCharacterImage({ engine: "main", imageUrls: portrait ? [portrait, photo] : [photo], prompt });
     const id = randomBytes(6).toString("base64url");
     const file = await saveFile(avatarId, `concept-${id}.png`, await download(url));
+    await rememberFalLink(file, url);
     const concept: Concept = { id, url, file, prompt, kind: "preview", drawnBy: "main", style: STYLE_ID, selfie: selfie.file, createdAt: Date.now() };
     let kept = false;
     await updateAvatar(avatarId, (r) => {
