@@ -6,6 +6,7 @@ import { appearanceSchema } from "@/lib/avatar/options";
 import { updateAvatar } from "@/lib/server/db";
 import { HttpError, handle, ownerView, requireOwner } from "@/lib/server/http";
 import { advanceModelJob } from "@/lib/server/jobs";
+import { deleteAvatar } from "@/lib/server/removal";
 import { activeProvider, freeClone, presetVoices } from "@/lib/server/voice";
 
 /** Room for the final merge of a model, which runs after the response. */
@@ -64,4 +65,12 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/avatars
   // Switching to a stock voice frees the old clone (and its ElevenLabs voice slot).
   if (body.voicePreset) freeClone(previous);
   return Response.json({ avatar: await ownerView(record) });
+});
+
+/** Deletes the avatar and everything stored for it: photo, drawings, 3D model, voice recording and clone. */
+export const DELETE = handle(async (req: Request, ctx: RouteContext<"/api/avatars/[id]">) => {
+  const { id } = await ctx.params;
+  await requireOwner(req, id);
+  await deleteAvatar(id);
+  return Response.json({ deleted: true });
 });

@@ -33,7 +33,7 @@ describe("database setup", () => {
     old.close();
 
     vi.resetModules();
-    (globalThis as { __iidentPg?: unknown }).__iidentPg = undefined;
+    (globalThis as { __aliikePg?: unknown }).__aliikePg = undefined;
     const info = vi.spyOn(console, "info").mockImplementation(() => {});
     const db = await import("../db");
     const sam = (await db.getAvatarBySlug("sam"))!;

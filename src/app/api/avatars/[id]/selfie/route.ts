@@ -1,10 +1,11 @@
 import { after } from "next/server";
 import sharp from "sharp";
-import { updateAvatar } from "@/lib/server/db";
+import { avatarOwner, updateAvatar } from "@/lib/server/db";
+import { track } from "@/lib/server/insights";
 import { uploadToFal } from "@/lib/server/fal";
 import { HttpError, MAX_UPLOAD_BYTES, handle, ownerView, rateLimit, requireOwner } from "@/lib/server/http";
 import { ensureStarter } from "@/lib/server/starter";
-import { putFile } from "@/lib/server/storage";
+import { saveFile } from "@/lib/server/avatarFiles";
 
 /** The portrait and the starter character are drawn after the response, which takes about half a minute. */
 export const maxDuration = 300;
@@ -35,7 +36,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
     throw new HttpError(400, "We couldn't read that image. Try a JPG or PNG.");
   }
 
-  const key = await putFile(id, `selfie-${Date.now().toString(36)}.jpg`, jpeg);
+  const key = await saveFile(id, `selfie-${Date.now().toString(36)}.jpg`, jpeg);
   const url = await uploadToFal(jpeg, "image/jpeg", "selfie.jpg");
   const record = await updateAvatar(id, (r) => {
     r.selfie = { file: key, url };
@@ -44,5 +45,6 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
   // Start drawing the person now (their clean portrait, then a starter character), so that by the
   // time they have picked a look, previewing it on themselves takes seconds.
   after(() => ensureStarter(id));
+  await track("selfie_uploaded", { userId: await avatarOwner(id), avatarId: id });
   return Response.json({ avatar: await ownerView(record) });
 });

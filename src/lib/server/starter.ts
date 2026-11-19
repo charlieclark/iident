@@ -6,7 +6,8 @@ import { sketchBase, withConcept } from "./concepts";
 import { getAvatar, updateAvatar } from "./db";
 import { generateCharacterImage } from "./fal";
 import { ensurePortrait } from "./portrait";
-import { download, putFile } from "./storage";
+import { download } from "./storage";
+import { saveFile } from "./avatarFiles";
 
 /**
  * The starter character: the first picture of a person, in the look they
@@ -67,7 +68,7 @@ async function draw(avatarId: string, record: AvatarRecord, selfie: Selfie): Pro
     const prompt = buildConceptPrompt(record.appearance, { portrait: !!portrait });
     const url = await generateCharacterImage({ engine: "main", imageUrls: portrait ? [portrait, selfie.url] : [selfie.url], prompt });
     const id = randomBytes(6).toString("base64url");
-    const file = await putFile(avatarId, `concept-${id}.png`, await download(url));
+    const file = await saveFile(avatarId, `concept-${id}.png`, await download(url));
     const concept: Concept = { id, url, file, prompt, kind: "preview", drawnBy: "main", style: STYLE_ID, selfie: selfie.file, createdAt: Date.now() };
     let kept = false;
     await updateAvatar(avatarId, (r) => {

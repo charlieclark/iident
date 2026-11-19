@@ -3,7 +3,8 @@ import { PORTRAIT_PROMPT } from "@/lib/avatar/options";
 import type { AvatarRecord } from "@/lib/avatar/types";
 import { getAvatar, updateAvatar } from "./db";
 import { generatePortrait } from "./fal";
-import { download, putFile } from "./storage";
+import { download } from "./storage";
+import { saveFile } from "./avatarFiles";
 
 /**
  * The clean portrait a character is drawn from: made once per selfie, in the
@@ -57,7 +58,7 @@ export async function ensurePortrait(avatarId: string): Promise<string | null> {
 async function make(avatarId: string, selfie: Selfie): Promise<string | null> {
   try {
     const url = await generatePortrait(selfie.url, PORTRAIT_PROMPT);
-    const file = await putFile(avatarId, `portrait-${Date.now().toString(36)}.png`, await download(url));
+    const file = await saveFile(avatarId, `portrait-${Date.now().toString(36)}.png`, await download(url));
     await updateAvatar(avatarId, (r) => {
       // A newer selfie may have arrived while this one was being redrawn.
       if (r.selfie?.file !== selfie.file) return false;

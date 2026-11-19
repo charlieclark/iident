@@ -4,7 +4,8 @@ import { PLANS } from "@/lib/billing/plans";
 import { sessionUser } from "@/lib/server/auth";
 import { billingEnabled, planOf } from "@/lib/server/billing";
 import { config } from "@/lib/server/config";
-import { avatarsOwnedBy, claimAvatar, isSlugTaken, updateAvatar } from "@/lib/server/db";
+import { avatarOwner, avatarsOwnedBy, claimAvatar, isSlugTaken, updateAvatar } from "@/lib/server/db";
+import { track } from "@/lib/server/insights";
 import { errorCode, UNIQUE_VIOLATION } from "@/lib/server/pg";
 import { HttpError, handle, normalizeSlug, ownerView, requireOwner, validateSlug } from "@/lib/server/http";
 
@@ -26,6 +27,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
   const problem = validateSlug(slug);
   if (problem) throw new HttpError(400, problem);
   if (await isSlugTaken(slug, id)) throw new HttpError(409, "That link is taken. Try another.");
+  if (record.suspended) throw new HttpError(403, "This avatar was taken down and can't be published. Contact us if you think that's a mistake.");
   if (record.model?.status !== "ready") throw new HttpError(400, "Finish building your 3D character first.");
   if (!record.persona.name.trim()) throw new HttpError(400, "Give your avatar a name first.");
   if (billingEnabled() && !record.published) await requireLiveSlot(req, id);
@@ -40,6 +42,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
     if (errorCode(err) === UNIQUE_VIOLATION) throw new HttpError(409, "That link is taken. Try another.");
     throw err;
   }
+  if (!record.published) await track("published", { userId: await avatarOwner(id), avatarId: id });
   return Response.json({ avatar: await ownerView(updated), url: `${config.appUrl}/a/${slug}` });
 });
 

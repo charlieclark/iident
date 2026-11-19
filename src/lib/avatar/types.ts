@@ -190,6 +190,8 @@ export type AvatarRecord = {
   concepts: Concept[];
   selectedConceptId?: string;
   model?: ModelJob;
+  /** Taken down by the site's owner (after a report, say): the page is unreachable and it can't be published again until restored. */
+  suspended?: { at: number; reason: string };
   faceRig?: FaceRig;
   thumbnail?: string;
   voice?: VoiceProfile;

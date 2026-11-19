@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { AccountLink } from "@/components/account/AccountLink";
 import { ContinueDraft } from "@/components/ContinueDraft";
+import { SiteFooter } from "@/components/SiteFooter";
 import { Logo } from "@/components/ui";
 // Imported, not served from /public: the address then carries a hash of the
 // picture, so a changed picture is never hidden behind a cached old one.
@@ -91,9 +92,7 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="mx-auto max-w-6xl px-4 py-8 text-xs text-ink-400 sm:px-6">
-        Only create avatars of yourself, or of people who have given you permission.
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

@@ -1,8 +1,8 @@
 import { config } from "@/lib/server/config";
 import { updateAvatar } from "@/lib/server/db";
 import { HttpError, MAX_UPLOAD_BYTES, handle, ownerView, rateLimit, requireOwner } from "@/lib/server/http";
-import { putFile } from "@/lib/server/storage";
 import { cloneRecording } from "@/lib/server/voice";
+import { saveFile } from "@/lib/server/avatarFiles";
 
 /** Cloning a voice can take a minute. */
 export const maxDuration = 300;
@@ -29,7 +29,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
   const contentType = file.type || `audio/${ext}`;
   // The original recording is kept so the voice can be re-cloned later
   // (for example after switching speech providers).
-  const sampleFile = await putFile(id, `voice-${Date.now().toString(36)}.${ext}`, data);
+  const sampleFile = await saveFile(id, `voice-${Date.now().toString(36)}.${ext}`, data);
 
   try {
     const voice = await cloneRecording(record, { data, filename: `voice.${ext}`, contentType, file: sampleFile });
