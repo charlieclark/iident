@@ -75,3 +75,17 @@ export function sendReportEmail(to: string[], report: { slug: string; reason: st
     link: { label: "Review it", url: link },
   });
 }
+
+/** Tells someone their unused account will be deleted, with everything in it, unless they sign in. */
+export function sendInactiveWarningEmail(to: string, months: number, deleteOn: Date, link: string): Promise<boolean> {
+  const date = deleteOn.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+  return send({
+    to,
+    subject: "Your Aliike account will be deleted soon",
+    lines: [
+      `Nobody has signed in to your Aliike account for ${months} months, and it has no paid plan. To avoid keeping your photo and voice longer than needed, we will delete the account and everything in it on or after ${date}.`,
+      "To keep it, sign in before then. If you no longer want it, you don't need to do anything.",
+    ],
+    link: { label: "Sign in to keep your account", url: link },
+  });
+}

@@ -6,6 +6,7 @@ import { forgetUser, track } from "./insights";
 import { query } from "./pg";
 import { deleteFiles } from "./storage";
 import { dropCached } from "./avatarFiles";
+import { deleteFalCopies } from "./falLinks";
 import { freeClone } from "./voice";
 
 /**
@@ -28,6 +29,8 @@ export async function deleteAvatar(id: string): Promise<boolean> {
   await deleteFiles(id).catch((err) => console.warn(`[delete ${id}] files left behind:`, err));
   // The 3D model and thumbnail are public and cached by the CDN; its copies go too.
   await dropCached(id);
+  // So do the copies the image service still holds (it keeps them for a day at most).
+  await deleteFalCopies(id, [record.model?.sources?.mesh, record.model?.sources?.rigged]);
   await track("avatar_deleted", { avatarId: id });
   return true;
 }

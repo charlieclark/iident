@@ -2,7 +2,12 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { freshDatabase } from "../../../../test/database";
 
 const generatePortrait = vi.fn<(selfieUrl: string, prompt: string) => Promise<string>>();
-vi.mock("../fal", () => ({ generatePortrait: (url: string, prompt: string) => generatePortrait(url, prompt) }));
+vi.mock("../fal", () => ({
+  generatePortrait: (url: string, prompt: string) => generatePortrait(url, prompt),
+  FAL_KEEPS_MS: 24 * 60 * 60 * 1000,
+  uploadToFal: async (_data: Uint8Array, _type: string, name: string) => `https://fal.example/again/${name}`,
+  deleteAtFal: async () => {},
+}));
 vi.mock("../storage", async (original) => ({
   ...(await original<typeof import("../storage")>()),
   download: async () => Buffer.from("png"),

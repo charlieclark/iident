@@ -53,7 +53,8 @@ function updateAccount(userId: string, change: (a: AccountData) => void): Promis
 }
 
 /** Statuses in which a subscription still gives access. Stripe retries failed payments while past_due. */
-const ACTIVE = new Set(["active", "trialing", "past_due"]);
+export const ACTIVE_STATUSES = ["active", "trialing", "past_due"];
+const ACTIVE = new Set(ACTIVE_STATUSES);
 
 export const hasActiveSubscription = (a: AccountData) => !!a.subscription && ACTIVE.has(a.subscription.status);
 

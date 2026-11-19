@@ -6,6 +6,9 @@ const generatePortrait = vi.fn<(selfieUrl: string, prompt: string) => Promise<st
 vi.mock("../fal", () => ({
   generateCharacterImage: (p: { engine: string; imageUrls: string[]; prompt: string }) => generateCharacterImage(p),
   generatePortrait: (url: string, prompt: string) => generatePortrait(url, prompt),
+  FAL_KEEPS_MS: 24 * 60 * 60 * 1000,
+  uploadToFal: async (_data: Uint8Array, _type: string, name: string) => `https://fal.example/again/${name}`,
+  deleteAtFal: async () => {},
 }));
 vi.mock("../storage", async (original) => ({
   ...(await original<typeof import("../storage")>()),

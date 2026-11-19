@@ -3,6 +3,7 @@ import sharp from "sharp";
 import { avatarOwner, updateAvatar } from "@/lib/server/db";
 import { track } from "@/lib/server/insights";
 import { uploadToFal } from "@/lib/server/fal";
+import { rememberFalLink } from "@/lib/server/falLinks";
 import { HttpError, MAX_UPLOAD_BYTES, handle, ownerView, rateLimit, requireOwner } from "@/lib/server/http";
 import { ensureStarter } from "@/lib/server/starter";
 import { saveFile } from "@/lib/server/avatarFiles";
@@ -38,6 +39,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
 
   const key = await saveFile(id, `selfie-${Date.now().toString(36)}.jpg`, jpeg);
   const url = await uploadToFal(jpeg, "image/jpeg", "selfie.jpg");
+  await rememberFalLink(key, url);
   const record = await updateAvatar(id, (r) => {
     r.selfie = { file: key, url };
     r.consent = true;

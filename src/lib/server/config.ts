@@ -72,6 +72,12 @@ export const config = {
     .filter(Boolean),
 
   /**
+   * The secret Vercel sends with scheduled calls (Authorization: Bearer ...).
+   * Without it the scheduled jobs refuse to run, so nobody else can start them.
+   */
+  cronSecret: env("CRON_SECRET"),
+
+  /**
    * Speech providers.
    * - `provider` speaks stock voices. ElevenLabs streams audio (first sound in
    *   ~250 ms) and is used whenever a key is set; MiniMax on fal is the

@@ -28,6 +28,8 @@ export type Account = { user: { email: string; /** One of the site's owners: may
 export type AdminOverview = {
   steps: { step: string; day: number; week: number; month: number }[];
   builds: { started: number; ready: number; failed: number };
+  /** Unused accounts warned and deleted in the last 30 days. */
+  inactive: { warned: number; deleted: number };
   errors: { id: number; at: number; source: string; route: string | null; message: string; detail: string | null }[];
   reports: { id: string; avatarId: string; slug: string | null; reason: string; details: string; reporterEmail: string | null; createdAt: number }[];
   takenDown: { id: string; name: string; slug: string | null; at: number; reason: string }[];

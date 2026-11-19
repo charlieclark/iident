@@ -8,7 +8,8 @@ import { wholeSamples } from "./pcm";
  *
  * Two ways to speak in a creator's voice:
  * - inline: the recording and its transcript go with every request, so
- *   nothing is stored at Fish and there is no limit on voices;
+ *   no voice model is created at Fish and there is no limit on voices
+ *   (what Fish keeps of a request is not documented; see docs/deploying.md);
  * - model: the recording is saved once as a private "fast" voice model and
  *   referenced by id. Fish caps how many models the API can create by the
  *   account's prepaid credit. A model is only a cache of the recording

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Contact, Legal, Section } from "@/components/Legal";
+import { RETENTION } from "@/lib/retention";
 import { SITE } from "@/lib/site";
 
 export const metadata: Metadata = { title: "Terms", description: "The terms for using Aliike." };
@@ -143,6 +144,10 @@ export default function TermsPage() {
           <li>
             You can delete an avatar, or your whole account, from your account page at any time. What deleting removes is described in the{" "}
             <Link href="/privacy">Privacy Policy</Link>.
+          </li>
+          <li>
+            An account with no paid plan that nobody has signed in to for {RETENTION.inactiveMonths} months is deleted, with everything in it,{" "}
+            {RETENTION.warningDays} days after we email its owner. Signing in before then keeps it.
           </li>
           <li>We can suspend or close an account that breaks these terms, that is used to harm others, or whose payments fail. No refund is due in those cases.</li>
           <li>

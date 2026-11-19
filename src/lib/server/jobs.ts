@@ -5,7 +5,8 @@ import { config, HttpError } from "./config";
 import { userById } from "./auth";
 import { avatarOwner, getAvatar, updateAvatar } from "./db";
 import { sendAvatarReadyEmail, sendBuildFailedEmail } from "./email";
-import { meshResult, rigResult, submitMesh, submitRig } from "./fal";
+import { FAL_KEEPS_MS, meshResult, rigResult, submitMesh, submitRig } from "./fal";
+import { falLink } from "./falLinks";
 import { mergeCharacter } from "./glb";
 import { logError, track } from "./insights";
 import { download } from "./storage";
@@ -66,11 +67,13 @@ export async function startModelJob(avatarId: string, conceptId: string, heightM
     // A retry of the same concept after a late-stage failure reuses the mesh
     // instead of re-sculpting (the slowest step).
     const prev = r.model;
+    const now = Date.now();
+    // fal keeps the mesh for a day; a retry later than that sculpts again.
+    const meshStillThere = !!prev && now - prev.startedAt < FAL_KEEPS_MS - 60 * 60 * 1000;
     const reuseMesh =
-      prev?.status === "failed" && prev.conceptId === conceptId && prev.heightMeters === heightMeters && !prev.meshReused
+      prev?.status === "failed" && prev.conceptId === conceptId && prev.heightMeters === heightMeters && !prev.meshReused && meshStillThere
         ? prev.sources?.mesh
         : undefined;
-    const now = Date.now();
     r.selectedConceptId = conceptId;
     r.faceRig = undefined;
     r.model = {
@@ -173,7 +176,7 @@ export async function advanceModelJob(record: AvatarRecord): Promise<Advance> {
       }
       const concept = record.concepts.find((c) => c.id === m.conceptId);
       if (!concept) return { record: await fail(id, "The character image for this build is gone. Create it again.") };
-      const request = await submitMesh(concept.url, hook);
+      const request = await submitMesh(await falLink(concept.file, concept.url), hook);
       return { record: await settle(id, lease.id, { status: "sculpting", requests: { mesh: request } }) };
     }
 

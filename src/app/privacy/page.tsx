@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Contact, Legal, Section } from "@/components/Legal";
+import { RETENTION } from "@/lib/retention";
 import { SITE } from "@/lib/site";
 
 export const metadata: Metadata = { title: "Privacy", description: "What Aliike collects, why, who else handles it, and how to delete it." };
@@ -57,7 +58,7 @@ export default function PrivacyPage() {
             <strong>Errors.</strong> When a page breaks in your browser we record the error message, where in our code it happened and which page you were on.
           </li>
           <li>
-            <strong>Your network address,</strong> briefly. Our hosting provider logs each request (address, browser type, page) for a short time. To limit
+            <strong>Your network address,</strong> briefly. Our hosting provider logs each request (address, browser type, page) and keeps the log for about a day. To limit
             abuse we also count requests per address, keeping only a scrambled form of the address, which is cleared once it has gone unused for a while.
           </li>
           <li>
@@ -85,8 +86,13 @@ export default function PrivacyPage() {
             3D character and speaks in the voice; your photo and your recording are never shown to visitors.
           </li>
           <li>
-            <strong>Until you delete.</strong> We keep them until you delete the avatar or your account, and then remove them as described under
-            &quot;Deleting&quot;. Deleting is how you withdraw your agreement.
+            <strong>Kept only while you use them.</strong> We destroy them when you delete the avatar or your account, or when the account has gone unused
+            for {RETENTION.inactiveMonths} months, whichever comes first. &quot;How long we keep things&quot; and &quot;Deleting&quot; below are our
+            retention schedule. Deleting is how you withdraw your agreement.
+          </li>
+          <li>
+            <strong>Other companies&apos; rules.</strong> The companies that draw, build and speak for us each work under their own terms, set out under
+            &quot;Who else handles your data&quot;, including whether they may use what they process to improve their own services.
           </li>
           <li>
             <strong>If it is your face or voice and you did not agree,</strong> use the Report link on the avatar&apos;s page or write to us, and we will take
@@ -124,7 +130,8 @@ export default function PrivacyPage() {
             the page.
           </li>
           <li>
-            The avatar&apos;s owner does not see what you said. We count how many replies each avatar gives, not what they contain.
+            The avatar&apos;s owner does not see what you said. We count how many replies each avatar gives, not what they contain. The companies below
+            keep what they receive for a limited time, as listed there.
           </li>
           <li>
             Do not tell an avatar anything private. It is an AI, and what you write is processed by the companies below.
@@ -137,33 +144,63 @@ export default function PrivacyPage() {
       </Section>
 
       <Section title="Who else handles your data">
-        <p>We use other companies to run parts of the service. Each receives only what its part needs:</p>
+        <p>We use other companies to run parts of the service. Each receives only what its part needs, and handles it under its own terms:</p>
         <ul>
           <li>
-            <strong>fal.ai,</strong> which runs or passes requests to image and 3D models, currently from OpenAI, Google, Black Forest Labs and Meshy: your
-            photo and the pictures made from it, to draw your character and build its 3D model; visitors&apos; voice messages and your voice recording, to turn
-            them into text.
+            <strong>
+              <a href="https://fal.ai/privacy">fal.ai</a>
+            </strong>{" "}
+            draws your character and builds its 3D model from your photo and the pictures made from it, and turns voice messages and your voice recording
+            into text. Some of the models are run by their makers, currently OpenAI, Google, Black Forest Labs and Meshy, who then receive the pictures too.
+            We have fal delete its copies of your photo, and of everything made from it, after 24 hours at most, and of a voice message after one hour.
+            We delete them there at once when you delete your avatar. fal keeps no record of a drawing or a transcription; of a 3D build it keeps the request, which holds settings and
+            links but no pictures, for up to 90 days.
           </li>
           <li>
-            <strong>Anthropic:</strong> what your avatar is told about itself and the conversation so far, to write its replies.
+            <strong>
+              <a href="https://www.anthropic.com/legal/privacy">Anthropic</a>
+            </strong>{" "}
+            writes the avatar&apos;s replies from what the avatar is told about itself and the conversation so far. Its terms bar it from training its models
+            on this, and it deletes it within 30 days unless it is flagged for a breach of its rules.
           </li>
           <li>
-            <strong>ElevenLabs and Fish Audio</strong> (or MiniMax, through fal.ai, when neither is available): the text to be spoken and, if you cloned your voice, your recording and its transcript, to produce
-            speech. Where the provider stores a voice clone, we ask it to delete the clone when you delete the avatar, record again or switch to a stock voice.
+            <strong>
+              <a href="https://elevenlabs.io/privacy-policy">ElevenLabs</a> and <a href="https://fish.audio/privacy/">Fish Audio</a>
+            </strong>{" "}
+            (or MiniMax, through fal.ai, when neither is available) produce the speech from the text to be spoken and, if you cloned your voice, your
+            recording and its transcript. A provider that stores a voice clone is asked to delete it when you delete the avatar, record again or switch to a
+            stock voice. ElevenLabs also keeps a history of the speech it produces, which contains what an avatar said, not what visitors wrote. Both
+            companies&apos; standard terms let them use what they process to improve their services unless the customer has refused or has an agreement that
+            rules it out.
           </li>
           <li>
-            <strong>Stripe:</strong> your email address and your payments.
+            <strong>
+              <a href="https://stripe.com/privacy">Stripe</a>
+            </strong>{" "}
+            takes payments. It receives your email address and collects your card and billing details itself.
           </li>
           <li>
-            <strong>Resend:</strong> your email address and the emails we send you.
+            <strong>
+              <a href="https://resend.com/legal/privacy-policy">Resend</a>
+            </strong>{" "}
+            sends our emails. It receives your email address and the emails, and keeps a copy of each for 30 days.
           </li>
           <li>
-            <strong>Vercel</strong> and our database provider: hosting, stored files and records.
+            <strong>
+              <a href="https://vercel.com/legal/privacy-policy">Vercel</a>
+            </strong>{" "}
+            hosts the site and stores the files (photos, pictures, 3D models, voice recordings) in private storage that runs on Amazon Web Services.
+          </li>
+          <li>
+            <strong>
+              <a href="https://neon.com/privacy-policy">Neon</a>
+            </strong>{" "}
+            (a Databricks company) runs the database, which holds accounts and everything about an avatar that is not a file.
           </li>
         </ul>
         <p>
-          These companies handle the data under their own terms for business customers. Most are in the United States, so your data is processed there and in
-          other countries where they operate, which may protect personal data differently from your own.
+          Most of these companies are in the United States, so your data is processed there and in other countries where they operate, which may protect
+          personal data differently from your own.
         </p>
         <p>Beyond these, we disclose personal data only:</p>
         <ul>
@@ -195,14 +232,21 @@ export default function PrivacyPage() {
       <Section title="How long we keep things">
         <ul>
           <li>
-            <strong>Your account, your avatars and everything in them:</strong> until you delete them. We do not delete inactive accounts on a schedule, so if
-            you stop using Aliike, delete your account.
+            <strong>Your account, your avatars and everything in them:</strong> until you delete them, or until the account goes unused.
+          </li>
+          <li>
+            <strong>Unused accounts:</strong> if an account has no paid plan and nobody has signed in to it for {RETENTION.inactiveMonths} months, we email
+            its owner, and {RETENTION.warningDays} days later delete the account and everything in it. Signing in at any point before then keeps it.
           </li>
           <li>
             <strong>Sign-in links:</strong> 20 minutes. <strong>Sessions:</strong> 60 days.
           </li>
           <li>
-            <strong>Errors:</strong> about 30 days.
+            <strong>Errors:</strong> about 30 days. <strong>Hosting logs:</strong> about a day.
+          </li>
+          <li>
+            <strong>Copies at the companies above:</strong> photos and pictures at fal.ai 24 hours, voice messages one hour, conversations at Anthropic up to 30 days,
+            emails at Resend 30 days. Speech history at ElevenLabs stays until we clear it.
           </li>
           <li>
             <strong>The record of steps you reached:</strong> for as long as your account exists. After that the counts are kept, attached to a random
@@ -221,17 +265,19 @@ export default function PrivacyPage() {
         <p>You can delete an avatar or your account from your account page at any time. It takes effect at once:</p>
         <ul>
           <li>
-            <strong>Deleting an avatar</strong> removes its photo, portrait, drawings, 3D model, thumbnail, voice recording and everything you wrote for it,
-            asks the speech provider to delete its voice clone, and clears the copies of its 3D model held by our content network. Its page stops existing.
+            <strong>Deleting an avatar</strong> permanently removes its photo, portrait, drawings, 3D model, thumbnail, voice recording and everything you
+            wrote for it. It also deletes the copies fal.ai holds, asks the speech provider to delete its voice clone, and clears the copies of its 3D model
+            held by our content network. Its page stops existing.
           </li>
           <li>
             <strong>Deleting your account</strong> does that for every avatar, ends your plan, signs you out everywhere and removes your email address from our
             records.
           </li>
         </ul>
-        <p>What deleting cannot reach:</p>
+        <p>What deleting cannot reach straight away:</p>
         <ul>
-          <li>Copies the companies above hold from processing, and any backups of our database, which expire on their own schedules.</li>
+          <li>Backups of our database, which Neon keeps for up to 30 days. They hold records such as your email address and what you wrote, not files.</li>
+          <li>The copies listed above that other companies keep for a fixed time, such as emails and conversations.</li>
           <li>A 3D model already downloaded by the browser of someone who visited the avatar&apos;s page.</li>
           <li>Payment records at Stripe.</li>
         </ul>

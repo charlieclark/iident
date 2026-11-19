@@ -12,6 +12,7 @@ import {
   uploadToFal,
 } from "./fal";
 import { brightenWav } from "./brighten";
+import { falLink, rememberFalLink } from "./falLinks";
 import * as fish from "./fish";
 import { PCM_SAMPLE_RATE } from "./pcm";
 import { contentTypeFor, getFile } from "./storage";
@@ -61,7 +62,8 @@ const cloneName = (r: AvatarRecord) => `Aliike ${r.persona.name.trim() || r.id}`
 
 /** What is said in a recording, in the persona's language. */
 async function transcribeSample(record: AvatarRecord, sample: Sample): Promise<string> {
-  const url = await uploadToFal(sample.data, sample.contentType, sample.filename);
+  // Only needed for the minute the transcription takes.
+  const url = await uploadToFal(sample.data, sample.contentType, sample.filename, "1h");
   const text = await transcribe(url, languageCode(record.persona.language));
   if (!text) throw new Error("No speech found in the voice recording");
   return text;
@@ -106,6 +108,7 @@ export async function cloneRecording(record: AvatarRecord, sample: Sample & { fi
   let voice: VoiceProfile;
   if (provider === "minimax") {
     const sampleUrl = await uploadToFal(sample.data, sample.contentType, sample.filename);
+    await rememberFalLink(sample.file, sampleUrl);
     const cloned = await cloneMinimax({ audioUrl: sampleUrl, previewText: greetingFor(record.persona) });
     voice = { mode: "clone", provider, voiceId: cloned.voiceId, sampleFile: sample.file, sampleUrl, previewUrl: cloned.previewUrl, createdAt: Date.now() };
   } else {
@@ -185,7 +188,8 @@ async function speakMinimaxAs(record: AvatarRecord, text: string, voiceId: strin
     const voice = record.voice;
     const isClone = usesClonedVoice(record) && (voice?.provider ?? "minimax") === "minimax" && voice?.voiceId === voiceId;
     if (!isClone || !voice?.sampleUrl) throw err;
-    const fresh = await cloneMinimax({ audioUrl: voice.sampleUrl, previewText: text.slice(0, 200) });
+    const audioUrl = voice.sampleFile ? await falLink(voice.sampleFile, voice.sampleUrl) : voice.sampleUrl;
+    const fresh = await cloneMinimax({ audioUrl, previewText: text.slice(0, 200) });
     await updateAvatar(record.id, (r) => {
       if (r.voice) r.voice = { ...r.voice, voiceId: fresh.voiceId };
     });
