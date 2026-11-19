@@ -16,8 +16,8 @@ export function Legal({ title, intro, children }: { title: string; intro: ReactN
       <main className="mx-auto max-w-3xl px-4 pb-10 pt-4 sm:px-6">
         <h1 className="text-3xl font-semibold tracking-tight text-ink-900 sm:text-4xl">{title}</h1>
         <p className="mt-2 text-sm text-ink-500">Last updated {SITE.legalUpdated}</p>
-        <div className="mt-6 text-[15px] leading-relaxed text-ink-700">{intro}</div>
-        <div className="mt-2 space-y-8">{children}</div>
+        <div className="mt-6 space-y-3 text-[15px] leading-relaxed text-ink-700 [&_a]:underline">{intro}</div>
+        <div className="mt-2 space-y-8 [counter-reset:section]">{children}</div>
       </main>
       <SiteFooter className="max-w-3xl" />
     </div>
@@ -26,8 +26,8 @@ export function Legal({ title, intro, children }: { title: string; intro: ReactN
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section>
-      <h2 className="text-lg font-semibold text-ink-900">{title}</h2>
+    <section className="[counter-increment:section]">
+      <h2 className="text-lg font-semibold text-ink-900 before:content-[counter(section)_'._']">{title}</h2>
       <div className="mt-2 space-y-3 text-[15px] leading-relaxed text-ink-700 [&_a]:underline [&_li]:ml-5 [&_li]:list-disc [&_ul]:space-y-1.5">{children}</div>
     </section>
   );
