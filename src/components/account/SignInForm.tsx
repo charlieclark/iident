@@ -42,7 +42,7 @@ export function SignInForm() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4 py-10">
-      <Link href="/" aria-label="Twiins home" className="mb-8 self-center">
+      <Link href="/" aria-label="Aliike home" className="mb-8 self-center">
         <Logo />
       </Link>
       <Card className="p-6 sm:p-8">
@@ -70,7 +70,7 @@ export function SignInForm() {
           </div>
         ) : (
           <form onSubmit={submit}>
-            <h1 className="text-2xl font-semibold tracking-tight text-ink-900">{starting ? "Create your account to start" : "Sign in to Twiins"}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-ink-900">{starting ? "Create your account to start" : "Sign in to Aliike"}</h1>
             <p className="mt-2 text-sm text-ink-600">
               {starting
                 ? "Your avatar is saved to your account as you make it. Enter your email and we'll send you a link: no password. Already have an account? The same link signs you in."

@@ -35,7 +35,7 @@ export type AdminOverview = {
 export type AdminAction = { action: "take-down"; avatarId: string; reason?: string } | { action: "restore"; avatarId: string } | { action: "dismiss"; reportId: string };
 export type BackdropChoice = z.infer<typeof backdropChoiceSchema>;
 
-const DRAFTS_KEY = "twiins:drafts";
+const DRAFTS_KEY = "aliike:drafts";
 
 type Draft = { id: string; token: string; updatedAt: number };
 

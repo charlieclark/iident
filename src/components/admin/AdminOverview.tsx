@@ -70,7 +70,7 @@ export function AdminOverview() {
   return (
     <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
       <header className="flex items-center justify-between py-5">
-        <Link href="/" aria-label="Twiins home">
+        <Link href="/" aria-label="Aliike home">
           <Logo />
         </Link>
         <Link href="/me" className="rounded-full px-3 py-2 text-sm font-medium text-ink-700 transition hover:bg-ink-100">

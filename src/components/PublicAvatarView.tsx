@@ -91,7 +91,7 @@ export function PublicAvatarView({ avatar }: { avatar: PublicAvatar }) {
           className="mx-auto max-w-xl"
         />
         <p className={cx("mx-auto mt-3 max-w-xl text-center text-[11px]", dark ? "text-white/40" : "text-ink-500")}>
-          You&apos;re talking to an AI version of {persona.name}. It can make mistakes. <span className="whitespace-nowrap">Made with Twiins.</span>{" "}
+          You&apos;re talking to an AI version of {persona.name}. It can make mistakes. <span className="whitespace-nowrap">Made with Aliike.</span>{" "}
           <ReportAvatar slug={avatar.slug} dark={dark} />
         </p>
       </div>

@@ -4,9 +4,9 @@
  * pages leave out what isn't set.
  */
 export const SITE = {
-  name: "Twiins",
+  name: "Aliike",
   /** The person or company that runs the site and is the other party to the Terms. */
-  legalName: process.env.NEXT_PUBLIC_LEGAL_NAME?.trim() || "Twiins",
+  legalName: process.env.NEXT_PUBLIC_LEGAL_NAME?.trim() || "Aliike",
   /** Where people write about their data, a takedown or a bill. */
   contactEmail: process.env.NEXT_PUBLIC_CONTACT_EMAIL?.trim() || "",
   /** Whose law the Terms are under, e.g. "the State of California, USA". */

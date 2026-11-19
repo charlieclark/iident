@@ -37,9 +37,9 @@ export async function sendSignInEmail(to: string, link: string): Promise<{ deliv
   }
   await send({
     to,
-    subject: "Your Twiins sign-in link",
-    lines: ["Open this link to sign in to Twiins:", "It works once and expires in 20 minutes. If you didn't ask for it, you can ignore this email."],
-    link: { label: "Sign in to Twiins", url: link },
+    subject: "Your Aliike sign-in link",
+    lines: ["Open this link to sign in to Aliike:", "It works once and expires in 20 minutes. If you didn't ask for it, you can ignore this email."],
+    link: { label: "Sign in to Aliike", url: link },
   });
   return { delivered: true };
 }
@@ -50,7 +50,7 @@ export function sendAvatarReadyEmail(to: string, name: string, link: string): Pr
   return send({
     to,
     subject: `${who} is ready`,
-    lines: [`${who} has been built in 3D and is ready for its voice and personality.`, "You're getting this because you started a build on Twiins."],
+    lines: [`${who} has been built in 3D and is ready for its voice and personality.`, "You're getting this because you started a build on Aliike."],
     link: { label: "Open your avatar", url: link },
   });
 }
@@ -61,7 +61,7 @@ export function sendBuildFailedEmail(to: string, name: string, link: string): Pr
   return send({
     to,
     subject: "Your 3D build didn't finish",
-    lines: [`Something went wrong while building ${who} in 3D. Trying again doesn't count against your plan.`, "You're getting this because you started a build on Twiins."],
+    lines: [`Something went wrong while building ${who} in 3D. Trying again doesn't count against your plan.`, "You're getting this because you started a build on Aliike."],
     link: { label: "Try again", url: link },
   });
 }

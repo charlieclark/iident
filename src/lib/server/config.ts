@@ -36,7 +36,7 @@ export const config = {
    */
   email: {
     resendKey: env("RESEND_API_KEY"),
-    from: env("EMAIL_FROM", "Twiins <login@example.com>")!,
+    from: env("EMAIL_FROM", "Aliike <login@example.com>")!,
   },
 
   /**

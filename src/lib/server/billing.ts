@@ -190,7 +190,7 @@ export async function createCheckout(user: User, plan: PaidPlanId): Promise<stri
           "line_items[0][price_data][currency]": "usd",
           "line_items[0][price_data][unit_amount]": String(PLANS[plan].price * 100),
           "line_items[0][price_data][recurring][interval]": "month",
-          "line_items[0][price_data][product_data][name]": `Twiins ${PLANS[plan].name}`,
+          "line_items[0][price_data][product_data][name]": `Aliike ${PLANS[plan].name}`,
           "line_items[0][price_data][product_data][tax_code]": config.stripe.taxCode,
         }),
     "subscription_data[metadata][plan]": plan,

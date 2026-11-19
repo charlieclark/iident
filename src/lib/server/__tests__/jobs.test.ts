@@ -219,10 +219,10 @@ describe("3D build", () => {
 
   it("asks the 3D service to call back when the site has a public address", async () => {
     const id = await draft();
-    config.appUrl = "https://twiins.example";
+    config.appUrl = "https://aliike.example";
     const { record } = await jobs.startModelJob(id, "c1", 1.7);
     const hook = fal.submitMesh.mock.calls[0][1]!;
-    expect(hook).toBe(`https://twiins.example/api/fal/webhook?avatar=${id}&key=${record.model!.hookKey}`);
+    expect(hook).toBe(`https://aliike.example/api/fal/webhook?avatar=${id}&key=${record.model!.hookKey}`);
     expect(record.model!.hookKey).toMatch(/^[\w-]{20,}$/);
   });
 });

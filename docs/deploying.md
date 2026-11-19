@@ -1,6 +1,6 @@
 # Deploying to Vercel
 
-Twiins runs on Vercel with a Postgres database and a Vercel Blob store. Nothing in it needs a server that stays up: every request is handled by a short-lived function, and anything that takes longer is split into steps kept in the database.
+Aliike runs on Vercel with a Postgres database and a Vercel Blob store. Nothing in it needs a server that stays up: every request is handled by a short-lived function, and anything that takes longer is split into steps kept in the database.
 
 ## What runs where
 

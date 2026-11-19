@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Contact, Legal, Section } from "@/components/Legal";
 import { SITE } from "@/lib/site";
 
-export const metadata: Metadata = { title: "Terms", description: "The terms for using Twiins." };
+export const metadata: Metadata = { title: "Terms", description: "The terms for using Aliike." };
 
 // A plain-language draft that follows what the product does. Have it reviewed
 // by a lawyer before launch, and set NEXT_PUBLIC_LEGAL_NAME,
@@ -14,12 +14,12 @@ export default function TermsPage() {
       title="Terms"
       intro={
         <p>
-          Twiins turns a photo and a voice recording into a talking 3D avatar with a personality, at a link you can share. These terms are the agreement between
+          Aliike turns a photo and a voice recording into a talking 3D avatar with a personality, at a link you can share. These terms are the agreement between
           you and {SITE.legalName} (&quot;we&quot;) for using it. By creating an account you agree to them.
         </p>
       }
     >
-      <Section title="Who can use Twiins">
+      <Section title="Who can use Aliike">
         <p>You must be 18 or older. You sign in with your email address, and you are responsible for what happens in your account.</p>
       </Section>
 
@@ -31,7 +31,7 @@ export default function TermsPage() {
           </li>
           <li>
             <strong>It stays yours.</strong> Your photo, your recording, what you write and the avatar made from them remain yours. You give us permission to store
-            and process them, and to show the published avatar to people who open its link, for as long as you keep it on Twiins. That is all we use them for.
+            and process them, and to show the published avatar to people who open its link, for as long as you keep it on Aliike. That is all we use them for.
           </li>
           <li>
             <strong>You are responsible for it.</strong> You decide what your avatar knows, how it speaks and whether it is published. What it says to visitors is
@@ -82,7 +82,7 @@ export default function TermsPage() {
 
       <Section title="No guarantees">
         <p>
-          Twiins is provided as it is. We work to keep it running and correct, but we do not promise that it will always be available, that an avatar will look or
+          Aliike is provided as it is. We work to keep it running and correct, but we do not promise that it will always be available, that an avatar will look or
           sound exactly like you, or that its answers will be accurate. To the extent the law allows, we are not liable for indirect or consequential losses, and
           our total liability to you is limited to what you paid us in the twelve months before the claim.
         </p>

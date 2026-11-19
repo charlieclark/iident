@@ -9,7 +9,7 @@ export function Legal({ title, intro, children }: { title: string; intro: ReactN
   return (
     <div className="min-h-dvh">
       <header className="mx-auto flex max-w-3xl items-center justify-between px-4 py-5 sm:px-6">
-        <Link href="/" aria-label="Twiins home">
+        <Link href="/" aria-label="Aliike home">
           <Logo />
         </Link>
       </header>

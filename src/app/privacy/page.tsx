@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Contact, Legal, Section } from "@/components/Legal";
 import { SITE } from "@/lib/site";
 
-export const metadata: Metadata = { title: "Privacy", description: "What Twiins collects, why, and how to delete it." };
+export const metadata: Metadata = { title: "Privacy", description: "What Aliike collects, why, and how to delete it." };
 
 // A plain-language draft that follows what the code does (see src/lib/server).
 // Have it reviewed by a lawyer before launch: face and voice data are treated
@@ -118,7 +118,7 @@ export default function PrivacyPage() {
       </Section>
 
       <Section title="Age">
-        <p>Twiins is for people aged 18 and over. We do not knowingly collect data from anyone younger.</p>
+        <p>Aliike is for people aged 18 and over. We do not knowingly collect data from anyone younger.</p>
       </Section>
 
       <Section title="Changes and contact">

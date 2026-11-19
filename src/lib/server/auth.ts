@@ -13,7 +13,7 @@ import { one, query } from "./pg";
 
 export type User = { id: string; email: string; createdAt: number };
 
-export const SESSION_COOKIE = "twiins_session";
+export const SESSION_COOKIE = "aliike_session";
 const LINK_TTL = 20 * 60 * 1000;
 const SESSION_TTL = 60 * 24 * 60 * 60 * 1000;
 const LINKS_PER_HOUR = 5;
