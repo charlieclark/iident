@@ -6,7 +6,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, saveDraft, tokenFor, type Avatar } from "@/lib/client/api";
 import { Button, cx, Logo, Notice, Spinner } from "@/components/ui";
 import { AccountLink } from "@/components/account/AccountLink";
-import { useAccount } from "@/lib/client/account";
 import { BuildStatus } from "./BuildStatus";
 import { LookStep } from "./LookStep";
 import { PersonaStep } from "./PersonaStep";
@@ -59,6 +58,14 @@ export function CreateFlow() {
     (async () => {
       try {
         const id = params.get("id");
+        // An account comes first: visitors sign up (or in) and are brought back here.
+        const { user } = await api.me();
+        if (!user) {
+          router.replace(`/login?next=${encodeURIComponent(id ? `/create?id=${id}` : "/create")}`);
+          return;
+        }
+        // Drafts this browser made before accounts were required come along.
+        await api.claimDrafts().catch(() => {});
         if (id) {
           // This browser's token if it made the avatar, otherwise the account's session.
           const existing = tokenFor(id) ?? "";
@@ -69,7 +76,8 @@ export function CreateFlow() {
           if (opened) {
             setAvatar(opened.avatar);
             setToken(existing);
-            setStep(initialStep(opened.avatar));
+            // Back from checkout: the look step starts the build that was paid for.
+            setStep(params.get("build") ? "look" : initialStep(opened.avatar));
             if (existing) saveDraft(id, existing);
             return;
           }
@@ -184,30 +192,12 @@ export function CreateFlow() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
-        <SaveReminder avatar={avatar} />
         {step === "photo" && <PhotoStep {...props} />}
-        {step === "look" && <LookStep {...props} />}
+        {step === "look" && <LookStep {...props} autoBuild={params.get("build")} />}
         {step === "voice" && <VoiceStep {...props} />}
         {step === "persona" && <PersonaStep {...props} />}
         {step === "share" && <ShareStep {...props} />}
       </main>
-    </div>
-  );
-}
-
-/** Once there is something worth keeping, tells a signed-out creator it only lives in this browser. */
-function SaveReminder({ avatar }: { avatar: Avatar }) {
-  const { account } = useAccount();
-  if (!account || account.user || !avatar.concepts.some((c) => c.kind === "final")) return null;
-  return (
-    <div className="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-2xl bg-accent-50 px-4 py-3 text-sm text-accent-800">
-      <span>This avatar is only saved in this browser. Sign in to keep it and open it on any device.</span>
-      <Link
-        href={`/login?next=${encodeURIComponent(`/create?id=${avatar.id}`)}`}
-        className="shrink-0 rounded-full bg-accent-500 px-4 py-1.5 font-medium text-white transition hover:bg-accent-600"
-      >
-        Save to an account
-      </Link>
     </div>
   );
 }

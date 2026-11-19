@@ -183,6 +183,8 @@ export type AvatarRecord = {
     portrait?: { file: string; url: string };
     /** When a server instance started making the portrait, so that others wait for it instead of making their own. */
     portraitClaimedAt?: number;
+    /** The same, for the first drawing of the person (their starter character). */
+    starterClaimedAt?: number;
   };
   appearance: Appearance;
   concepts: Concept[];

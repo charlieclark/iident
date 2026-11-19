@@ -177,4 +177,45 @@ describe("billing", () => {
     expect(await usage.overLimit((await db.getAvatar(second.id))!)).toBe(true);
     expect(usage.limitMessage(owned, await usage.replyAllowance(owned))).toMatch(/rest my voice/);
   });
+
+  it("lets a 3D build start only once it is paid for", async () => {
+    const user = await newUser();
+    expect(billing.buildNeedsPayment()).toBe(true);
+    await expect(billing.requireBuildAllowance(user, false)).rejects.toMatchObject({ status: 402, message: expect.stringMatching(/Creator plan/) });
+    // Not even a retry of a failed build is free without a plan.
+    await expect(billing.requireBuildAllowance(user, true)).rejects.toMatchObject({ status: 402 });
+
+    fakeStripe({ "checkout/sessions/cs_test_12345678": paidSession(user.id, subscription(user.id)) });
+    await billing.confirmCheckout(user, "cs_test_12345678");
+    // Creator includes two builds a month; each one started is counted against the account.
+    for (let i = 0; i < 2; i++) {
+      expect(await billing.requireBuildAllowance(user, false)).toBe(user.id);
+      await billing.countBuild(user.id);
+    }
+    await expect(billing.requireBuildAllowance(user, false)).rejects.toMatchObject({ status: 402, message: expect.stringMatching(/used all 2/) });
+    // A retry after a failed build isn't counted, and next month starts afresh.
+    expect(await billing.requireBuildAllowance(user, true)).toBeNull();
+    const nextMonth = new Date(Date.now() + 32 * 24 * 60 * 60 * 1000);
+    expect(await billing.requireBuildAllowance(user, false, nextMonth)).toBe(user.id);
+  });
+
+  it("gives no free builds on a live site that has no payments set up", async () => {
+    const user = await newUser();
+    const key = config.stripe.secretKey;
+    config.stripe.secretKey = undefined;
+    try {
+      // A development server with payments off builds for free.
+      vi.stubEnv("NODE_ENV", "development");
+      expect(billing.buildNeedsPayment()).toBe(false);
+      // A live one doesn't: there is no way to pay, so there is no build.
+      vi.stubEnv("NODE_ENV", "production");
+      expect(billing.buildNeedsPayment()).toBe(true);
+      await expect(billing.requireBuildAllowance(user, false)).rejects.toMatchObject({ status: 503, message: expect.stringMatching(/payments are set up/) });
+      // Accounts given a plan by hand can still build, for testing a deployment.
+      expect(await billing.requireBuildAllowance(await newUser("friend@example.com"), false)).toMatch(/^u_/);
+    } finally {
+      config.stripe.secretKey = key;
+      vi.unstubAllEnvs();
+    }
+  });
 });

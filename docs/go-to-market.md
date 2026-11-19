@@ -62,7 +62,7 @@ A cost-based way to set the Liinks offer:
 | Replies a month | none | 300 | 2,000 |
 | Cards, embed on your own site | No | Cards | Cards and embed |
 
-The free tier costs about 20 to 25 cents per person and gives them something to share (their character). The paywall sits exactly where the cost is: bringing it to life in 3D.
+The free tier costs about 15 to 20 cents per person (a portrait, a starter character, a few previews, one or two final characters; picking items costs nothing) and gives them something to share (their character). The paywall sits exactly where the cost is: bringing it to life in 3D.
 
 These prices are a starting point from costs, not from testing what people will pay. This table is what is built (`src/lib/billing/plans.ts`), with 2 builds in 3D a month on Creator and 5 on Pro; embedding on your own site is not built yet and is not advertised.
 
@@ -86,7 +86,7 @@ What works now:
 
 What still gets in the way, in order of impact:
 
-1. ~~No accounts.~~ Done: sign in by email link; a reminder to save appears once there is a final character. Not yet required at any step.
+1. ~~No accounts.~~ Done: an account (email link) is now required before the creator opens, so nothing is made that isn't saved, and every free character has an email address behind it.
 2. **The persona step is a long form.** Two fixes: draft it from two or three short answers, and, inside Liinks, fill it from the page (name, bio, links become the avatar's knowledge and cards with no typing).
 3. **Nothing to show for the free part.** Let people download or share their final character image before paying. It is the cheapest marketing available.
 4. **The 6-minute build has no notification.** If they close the tab they don't know it finished. Needs accounts (email) or a browser notification.

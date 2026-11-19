@@ -107,15 +107,32 @@ Every test above used synthetic selfies that were straight on, evenly lit and re
 | The same plus a written description of what is distinctive | Picks up hairline, brows and ears; reads as a caricature, and a loose word in the description shows (a "reddish" beard came out orange) |
 | The likeness model shown the style by example | Most like the person, but back toward a real face |
 
-The clean portrait is the selfie redrawn by GPT Image 2.6 as the same person straight on at eye level, in even light, with a relaxed face (`PORTRAIT_PROMPT`). It is the one step where a photographic result is right, because it is a reference and never the character. It is made once per selfie, in the background at upload (`src/lib/server/portrait.ts`), and the character prompt now also tells the model not to thicken or darken hair and brows, and not to copy a passing expression.
+The clean portrait is the selfie redrawn by GPT Image 2.6 as the same person straight on at eye level, in even light, with a relaxed face (`PORTRAIT_PROMPT`). It is the one step where a photographic result is right, because it is a reference and never the character. It is made once per selfie, in the background at upload (`src/lib/server/portrait.ts`), at medium quality: on the six test faces that took a median of 10.7 s against 17.0 s at high, with the same likeness to the selfie (0.848 against 0.848, worst case 0.80 against 0.82) and no difference to the eye, and the first drawing waits for it. Also, the character prompt now also tells the model not to thicken or darken hair and brows, and not to copy a passing expression.
 
 A written description of the person (from a vision model) is the next thing to try if likeness needs to go further.
+
+## Choosing a look: items in slots
+
+The creator used to redraw the person after every change, which made choosing slow (about 5 seconds per change, after a first drawing of 31 to 39 seconds). Three replacements were built in a row:
+
+1. **A mannequin dressed by the fast model**, each result shared by all accounts. A look nobody had tried still took 3 to 4 seconds.
+2. **A mannequin dressed in the browser** from ready-made pieces, layered and tinted. Instant, but it previews a dummy, and that was not what was wanted.
+3. **A loadout.** Kept. The items themselves are shown, as cards, and sit in slots once picked; the person is shown wearing the loadout when they ask ("Preview on me").
+
+The item pictures (`scripts/items/build.mjs`):
+
+- A featureless mannequin in the house style is kept as dark gray on bright green (`scripts/items/base.png`). For each option, Nano Banana 2.1 puts that one item on it in pure white and changes nothing else. It keeps the mannequin in place well: across the 64 drawings the rest of the picture moved by 0.6 to 3.2 percent of the brightness range.
+- The item is whatever is not green, is bright, and is brighter than the mannequin was at that spot (its own highlights are bright too). Cracks left by dark seams are sealed, openings that belong (the lenses of glasses) are kept, specks elsewhere are dropped, and the item's lightness becomes its shading.
+- It is cropped to a square. Hair, beards and accessories also get the matching crop of the mannequin to sit on.
+- In the browser a card is the item's shading multiplied by the chosen color, so one picture serves all 27 colors.
+
+Previewing on the person is a restyle of a picture of them (next section), so that picture has to exist. It is drawn in the background from the moment the selfie is uploaded (`src/lib/server/starter.ts`): the portrait, then the character in the look they start with. It takes 36 to 45 seconds, during which the person is picking items, and it appears by itself.
 
 ## Sketches
 
 Drawing straight from the selfie, the fast model (FLUX.3 klein) loses the person in a cartoon style: adults become generic cartoon children, beards disappear, and features named in the prompt (glasses, freckles) get added to people who don't have them. Wording changes and a style reference image did not fix it (the reference's identity leaks in). What works is not asking it to draw the person at all:
 
-1. The first sketch is drawn from the selfie by the main model (about 15 to 20 s, 4 cents).
+1. The first picture (the starter character) is drawn by the main model from the portrait and the selfie, in the background at upload (4 cents).
 2. Every later sketch is the fast model *restyling that picture* with the new look (`buildSketchEditPrompt`): outfit, build, hair and facial hair all change correctly and the face stays, in 4 to 8 s for under a cent.
 3. Once a final exists, sketches restyle the final instead.
 

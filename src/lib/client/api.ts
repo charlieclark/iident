@@ -123,7 +123,7 @@ export const api = {
   },
   /** "preview": a quick draft of the look. "final": the high-likeness render the 3D model is built from. */
   drawCharacter: (id: string, token: string, appearance: Appearance, kind: "preview" | "final", signal?: AbortSignal) =>
-    request<{ avatar: Avatar; created: string[] }>(`/api/avatars/${id}/concepts`, {
+    request<{ avatar: Avatar; created: string[]; inline?: string }>(`/api/avatars/${id}/concepts`, {
       method: "POST",
       token,
       body: JSON.stringify({ appearance, kind }),

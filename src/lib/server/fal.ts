@@ -56,7 +56,7 @@ export function imageEditInput(
 /** Selfie -> the same person as a straight-on, evenly lit portrait with a relaxed face. */
 export async function generatePortrait(selfieUrl: string, prompt: string): Promise<string> {
   const model = config.models.portrait;
-  const out = await run<{ images?: FalFile[] }>(model, imageEditInput(model, prompt, [selfieUrl], "high", "portrait"), { pollInterval: 400 });
+  const out = await run<{ images?: FalFile[] }>(model, imageEditInput(model, prompt, [selfieUrl], config.models.portraitQuality, "portrait"), { pollInterval: 400 });
   const url = out.images?.[0]?.url;
   if (!url) throw new Error("The image model returned no image");
   return url;
@@ -73,8 +73,12 @@ export async function generateCharacterImage(params: {
   prompt: string;
   quality?: string;
 }): Promise<string> {
-  const model = params.engine === "sketch" ? config.models.preview : config.models.concept;
-  const out = await run<{ images?: FalFile[] }>(model, imageEditInput(model, params.prompt, params.imageUrls, params.quality), { pollInterval: 400 });
+  const sketch = params.engine === "sketch";
+  const model = sketch ? config.models.preview : config.models.concept;
+  const input = imageEditInput(model, params.prompt, params.imageUrls, params.quality);
+  // A sketch is looked at for a moment and replaced: a JPEG a tenth the size of the PNG reaches the screen sooner.
+  // It is also asked after more often, since it is ready in two or three seconds.
+  const out = await run<{ images?: FalFile[] }>(model, sketch ? { ...input, output_format: "jpeg" } : input, { pollInterval: sketch ? 200 : 400 });
   const url = out.images?.[0]?.url;
   if (!url) throw new Error("The image model returned no image");
   return url;

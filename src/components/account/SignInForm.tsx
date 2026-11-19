@@ -13,6 +13,8 @@ export function SignInForm() {
   const router = useRouter();
   const { account } = useAccount();
   const next = safeNext(params.get("next"));
+  /** Sent here by the creator, which needs an account before anything is made. */
+  const starting = !!next?.startsWith("/create");
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,9 +70,11 @@ export function SignInForm() {
           </div>
         ) : (
           <form onSubmit={submit}>
-            <h1 className="text-2xl font-semibold tracking-tight text-ink-900">Sign in to iident</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-ink-900">{starting ? "Create your account to start" : "Sign in to iident"}</h1>
             <p className="mt-2 text-sm text-ink-600">
-              Enter your email and we&apos;ll send you a link. No password. New here? The same link creates your account.
+              {starting
+                ? "Your avatar is saved to your account as you make it. Enter your email and we'll send you a link: no password. Already have an account? The same link signs you in."
+                : "Enter your email and we'll send you a link. No password. New here? The same link creates your account."}
             </p>
             <label className="mt-5 block">
               <span className="text-sm font-medium text-ink-800">Email</span>
@@ -92,7 +96,7 @@ export function SignInForm() {
               </div>
             )}
             <Button type="submit" size="lg" className="mt-5 w-full" loading={busy}>
-              Email me a sign-in link
+              {starting ? "Email me a link to start" : "Email me a sign-in link"}
             </Button>
             <p className="mt-4 text-xs text-ink-500">Avatars you&apos;ve started in this browser are added to your account when you sign in.</p>
           </form>

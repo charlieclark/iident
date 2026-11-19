@@ -3,14 +3,14 @@ import sharp from "sharp";
 import { updateAvatar } from "@/lib/server/db";
 import { uploadToFal } from "@/lib/server/fal";
 import { HttpError, MAX_UPLOAD_BYTES, handle, ownerView, rateLimit, requireOwner } from "@/lib/server/http";
-import { ensurePortrait } from "@/lib/server/portrait";
+import { ensureStarter } from "@/lib/server/starter";
 import { putFile } from "@/lib/server/storage";
 
-/** The clean portrait is made after the response, which takes up to 45 seconds. */
+/** The portrait and the starter character are drawn after the response, which takes about half a minute. */
 export const maxDuration = 300;
 
 
-/** Stores the selfie (normalized to a 1024px JPEG), mirrors it to fal storage and starts its clean portrait. */
+/** Stores the selfie (normalized to a 1024px JPEG), mirrors it to fal storage and starts drawing the person. */
 export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/[id]/selfie">) => {
   const { id } = await ctx.params;
   // Each selfie is redrawn as a clean portrait (about 4 cents), so uploads are limited more tightly than other files.
@@ -41,7 +41,8 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/avatars/
     r.selfie = { file: key, url };
     r.consent = true;
   });
-  // Start on the clean portrait now, so it is ready by the time a character is drawn.
-  after(() => ensurePortrait(id));
+  // Start drawing the person now (their clean portrait, then a starter character), so that by the
+  // time they have picked a look, previewing it on themselves takes seconds.
+  after(() => ensureStarter(id));
   return Response.json({ avatar: await ownerView(record) });
 });

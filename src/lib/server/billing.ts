@@ -80,6 +80,31 @@ export async function countBuild(userId: string, now = new Date()) {
   });
 }
 
+/**
+ * Whether a 3D build has to be paid for. Always, on a live site: a build
+ * costs a couple of dollars, so it never starts before payment. Only a
+ * development server with payments switched off builds for free.
+ */
+export const buildNeedsPayment = () => billingEnabled() || process.env.NODE_ENV === "production";
+
+/**
+ * Checks that an account's plan lets it start a 3D build now. Returns the
+ * account to count the build against, or null when this build isn't
+ * counted: a retry after a failed build isn't charged twice.
+ */
+export async function requireBuildAllowance(user: User, retry: boolean, now = new Date()): Promise<string | null> {
+  const account = await accountOf(user.id);
+  const plan = PLANS[planFrom(user, account)];
+  // A live site with no payment service can't take the payment a build needs. Accounts in COMP_EMAILS still have a plan.
+  if (!plan.builds && !billingEnabled()) throw new HttpError(503, "3D builds open as soon as payments are set up on this site.");
+  if (!plan.builds) throw new HttpError(402, "Bringing your character to life in 3D is part of the Creator plan.");
+  if (retry) return null;
+  if (buildsIn(account, now) >= plan.builds) {
+    throw new HttpError(402, `You've used all ${plan.builds} of this month's 3D builds on the ${plan.name} plan. They reset next month.`);
+  }
+  return user.id;
+}
+
 /** What the account pages show. */
 export async function billingView(user: User) {
   const account = await accountOf(user.id);
