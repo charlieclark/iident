@@ -94,7 +94,7 @@ async function request<T>(path: string, init: RequestInit & { token?: string | n
 }
 
 /**
- * Adds the owner token to URLs of private files (selfie, concepts, voice).
+ * Adds the owner token to URLs of private files (selfie, concepts).
  * With no token (an avatar opened through the account) the session cookie gives access.
  */
 export const ownerUrl = (url: string | null | undefined, token: string | null) =>
@@ -167,12 +167,6 @@ export const api = {
       token,
       body: JSON.stringify({ rig, thumbnail }),
     }),
-  cloneVoice: (id: string, token: string, file: Blob, name: string) => {
-    const form = new FormData();
-    form.set("file", file, name);
-    form.set("consent", "true");
-    return request<{ avatar: Avatar }>(`/api/avatars/${id}/voice`, { method: "POST", token, body: form });
-  },
   previewVoice: (id: string, token: string, body: { text?: string; preset?: string }) =>
     request<{ url: string; durationMs: number }>(`/api/avatars/${id}/voice/preview`, {
       method: "POST",

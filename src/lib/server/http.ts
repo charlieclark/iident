@@ -166,7 +166,7 @@ export async function ownerView(r: AvatarRecord) {
     faceRig: r.faceRig ?? null,
     thumbnailUrl: r.thumbnail ? fileUrl(r.thumbnail) : null,
     voice: r.voice
-      ? { mode: r.voice.mode, voiceId: r.voice.mode === "preset" ? r.voice.voiceId : null, previewUrl: r.voice.previewUrl ?? null }
+      ? { voiceId: r.voice.voiceId }
       : null,
   };
 }

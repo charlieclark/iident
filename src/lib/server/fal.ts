@@ -203,7 +203,7 @@ export async function rigResult(requestId: string): Promise<{ riggedGlbUrl: stri
   return { riggedGlbUrl: out.rigged_character_glb.url, clips };
 }
 
-/** Preset voices available without cloning (MiniMax system voices). */
+/** MiniMax's ready-made voices, offered when ElevenLabs isn't set up. */
 export const PRESET_VOICES = [
   { id: "Friendly_Person", label: "Friendly" },
   { id: "Calm_Woman", label: "Calm (female)" },
@@ -215,21 +215,6 @@ export const PRESET_VOICES = [
   { id: "Inspirational_girl", label: "Inspiring (female)" },
   { id: "Elegant_Man", label: "Elegant (male)" },
 ] as const;
-
-export async function cloneVoice(params: {
-  audioUrl: string;
-  previewText: string;
-}): Promise<{ voiceId: string; previewUrl?: string }> {
-  const out = await run<{ custom_voice_id: string; audio?: FalFile | null }>(config.models.voiceClone, {
-    audio_url: params.audioUrl,
-    text: params.previewText.slice(0, 900),
-    model: "speech-02-turbo",
-    noise_reduction: true,
-    need_volume_normalization: true,
-  });
-  if (!out.custom_voice_id) throw new Error("Voice cloning returned no voice id");
-  return { voiceId: out.custom_voice_id, previewUrl: out.audio?.url };
-}
 
 export async function speak(params: {
   text: string;

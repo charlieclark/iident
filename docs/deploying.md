@@ -8,7 +8,7 @@ Aliike runs on Vercel with a Postgres database and a Vercel Blob store. Nothing 
 | --- | --- | --- |
 | Pages and API | Vercel Functions (Node.js, Fluid compute) | `next dev` |
 | Database | Neon Postgres, through `DATABASE_URL` (any Postgres works) | An embedded Postgres (PGlite) in `data/pg`, no setup |
-| Files (selfies, character images, 3D models, voice recordings) | A private Vercel Blob store | `data/files` |
+| Files (selfies, character images, 3D models) | A private Vercel Blob store | `data/files` |
 | The 3D build | fal's queue, moved on by the creator's page and by fal's callback | The same, moved on by the creator's page |
 | Rate limits, sessions, plans | Postgres | The embedded Postgres |
 
@@ -31,8 +31,7 @@ Aliike runs on Vercel with a Postgres database and a Vercel Blob store. Nothing 
    | --- | --- |
    | `FAL_KEY` | Character images, the 3D build, speech-to-text |
    | `ANTHROPIC_API_KEY` | The avatar's conversation |
-   | `ELEVENLABS_API_KEY` | Streaming speech (recommended) |
-   | `FISH_API_KEY` | Cloned voices (recommended) |
+   | `ELEVENLABS_API_KEY` | The avatars' voices and speech. Set it on a live site: the Privacy page names ElevenLabs as the speech provider, and without the key speech falls back to MiniMax on fal |
    | `RESEND_API_KEY`, `EMAIL_FROM` | Sign-in emails, "your avatar is ready" and reports. Without them nobody can sign in on a deployed site |
    | `CRON_SECRET` | A long random string. Vercel sends it with the daily call that deletes unused accounts; without it that job refuses to run |
    | `ADMIN_EMAILS` | Your own address: lets that account open `/admin` (reports, takedowns, numbers, errors) and receive reports |
@@ -60,20 +59,18 @@ The Privacy page says what each provider keeps. Some of that is done by the code
 **Done by the code**
 
 - **fal.** Every file sent to fal and every result it makes is given a 24-hour expiry (one hour for voice messages), requests that are collected at once are sent with `X-Fal-Store-IO: 0` so fal keeps no record of them, and deleting an avatar deletes fal's copies immediately (`src/lib/server/fal.ts`, `falLinks.ts`). The two 3D steps keep fal's default request record (90 days), because their results are collected minutes later; it holds links and settings, no pictures. As a backstop, also set the account's default expiry: fal dashboard, or `PUT https://api.fal.ai/v1/storage/settings` with `{"expiration_duration_seconds": 86400}` ([docs](https://fal.ai/docs/platform-apis/v1/storage/settings/update.md)). Without an expiry fal keeps files indefinitely, at public links.
-- **ElevenLabs voices.** A cloned voice is deleted there when its avatar is deleted, re-recorded or switched to a stock voice.
 
 **For you to set**
 
-- **ElevenLabs: refuse training.** Its terms let it use content to improve its services unless you opt out: account settings → Terms and Privacy → Data use ([terms](https://elevenlabs.io/terms-of-use)). The opt-out only covers data from then on, so do it before launch.
-- **ElevenLabs: speech history.** It keeps the text and audio of everything it speaks (so, what avatars said) until deleted. Zero retention is for enterprise customers only and excludes voice cloning ([docs](https://elevenlabs.io/docs/eleven-api/resources/zero-retention-mode.md)). The Privacy page says this history "stays until we clear it": clear it regularly in the dashboard, or ask for a job that does.
+- **ElevenLabs: refuse training.** ElevenLabs only ever receives the text an avatar speaks, never a recording. Its terms still let it use content to improve its services unless you opt out: account settings → Terms and Privacy → Data use ([terms](https://elevenlabs.io/terms-of-use)). The opt-out only covers data from then on, so do it before launch, and then the sentence about this on the Privacy page can go.
+- **ElevenLabs: speech history.** It keeps the text and audio of everything it speaks (so, what avatars said) until deleted. Zero retention is for enterprise customers only ([docs](https://elevenlabs.io/docs/eleven-api/resources/zero-retention-mode.md)). The Privacy page says this history "stays until we clear it": clear it regularly in the dashboard, or ask for a job that does.
 - **Neon and Vercel plans.** The restore window and snapshots above. Vercel keeps request logs (with network addresses) for an hour on Hobby, a day on Pro, 30 days with Observability Plus; the Privacy page says "about a day".
 - **Resend** keeps sent emails for 30 days on every self-serve plan; the Privacy page says so.
 
 **Open questions for a lawyer, or to ask the provider in writing**
 
-- **Fish Audio.** Its public terms say content "may be used to develop, train, or enhance" its models, it publishes no data processing agreement, and it does not say how long it keeps the recording sent with each request. Until Fish confirms otherwise in writing (it offers zero data retention on enterprise contracts), the cautious setting is `CLONE_PROVIDER=elevenlabs` with the opt-out above. The cost is ElevenLabs' limit on stored voices (see the README).
 - **fal's partner models.** fal's API terms say it will not train on customer content, but exclude third-party models marked "Pending Enterprise Ready", for which its data processing agreement does not apply either ([terms](https://fal.ai/legal/api-services)). Ask fal which of the models in use (GPT Image, Nano Banana, FLUX, Meshy, Wizper) are covered, and what the makers keep.
-- **Biometric data clauses.** fal's acceptable use policy lists "biometric data (such as facial recognition data, fingerprints, voiceprints...)" among information its services may not be used to collect or process, and its data processing agreement says the services "are not designed for special categories of personal data" ([policy](https://fal.ai/legal/acceptable-use-policy)). Vercel's says customers are "prohibited from including sensitive data or special categories of data in Customer Data" ([DPA](https://vercel.com/legal/dpa), Schedule 1, 6.1). Whether a selfie and a voice recording used to make an avatar fall under these depends on whether they count as biometric data, which the law has not settled for voice. Get a view on this before launch; the answer could mean asking those providers for written confirmation, or storing the files elsewhere.
+- **Biometric data clauses.** fal's acceptable use policy lists "biometric data (such as facial recognition data, fingerprints, voiceprints...)" among information its services may not be used to collect or process, and its data processing agreement says the services "are not designed for special categories of personal data" ([policy](https://fal.ai/legal/acceptable-use-policy)). Vercel's says customers are "prohibited from including sensitive data or special categories of data in Customer Data" ([DPA](https://vercel.com/legal/dpa), Schedule 1, 6.1). The app does not record or clone voices, which removes the least settled part of this. What remains is the selfie. In the laws we read, a photograph is not biometric data by itself; measurements taken from it to identify a person are. The app identifies nobody: the creator's browser runs face detection on the selfie to check it is usable and keeps none of those measurements, and the image models then draw from the photo. Whether that keeps the selfie outside these clauses is a question for a lawyer before launch.
 - **Anthropic** needs nothing: its commercial terms bar training on customer content and it deletes inputs and outputs within 30 days.
 
 ## The scheduled job
@@ -94,9 +91,9 @@ Sign-in links, share links, Stripe return addresses and fal's callback are built
 
 fal's callback carries a per-build secret and is only a nudge: the app then asks fal what happened, and never trusts the request body. Preview deployments behind Vercel's deployment protection can't be called by fal; builds there still move on while the creator's page is open.
 
-**Uploads.** Vercel accepts request bodies up to 4.5 MB. The app's own limit is 4 MB everywhere, and the browser makes files fit before sending: photos over 1.5 MB are scaled down (the server keeps a 1024 px selfie anyway), and a voice sample is cut at 75 seconds (cloning needs 15 to 30).
+**Uploads.** Vercel accepts request bodies up to 4.5 MB. The app's own limit is 4 MB everywhere, and the browser makes files fit before sending: photos over 1.5 MB are scaled down (the server keeps a 1024 px selfie anyway).
 
-**Files.** Everything is served through `/api/files/...`. Private files (selfies, portraits, voice samples, character images) are checked against the owner on every request. Public ones (3D models, thumbnails, backdrops) have unchanging names and are cached by Vercel's CDN for a year, so after the first request for a model the function and the Blob store aren't touched. Each cached file carries a `Vercel-Cache-Tag` naming its avatar, and deleting an avatar or taking it down drops the copies with that tag (`dropCached` in `src/lib/server/avatarFiles.ts`), so a model doesn't outlive its avatar in the cache.
+**Files.** Everything is served through `/api/files/...`. Private files (selfies, portraits, character images) are checked against the owner on every request. Public ones (3D models, thumbnails, backdrops) have unchanging names and are cached by Vercel's CDN for a year, so after the first request for a model the function and the Blob store aren't touched. Each cached file carries a `Vercel-Cache-Tag` naming its avatar, and deleting an avatar or taking it down drops the copies with that tag (`dropCached` in `src/lib/server/avatarFiles.ts`), so a model doesn't outlive its avatar in the cache.
 
 **Rate limits** are token buckets in a Postgres table, one statement per check, so every instance counts against the same bucket. Keys are hashed; no IP addresses are stored.
 

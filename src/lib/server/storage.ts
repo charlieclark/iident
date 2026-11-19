@@ -4,7 +4,7 @@ import path from "node:path";
 import { config } from "./config";
 
 /**
- * Stored files (selfies, character images, 3D models, voice recordings),
+ * Stored files (selfies, character images, 3D models),
  * addressed as <avatarId>/<name> and served by /api/files/[...key], which
  * decides who may read what.
  *
@@ -95,7 +95,7 @@ export async function putFile(avatarId: string, name: string, data: Uint8Array |
   return key;
 }
 
-/** Removes everything stored for an avatar: selfie, portrait, character images, voice recording, model. */
+/** Removes everything stored for an avatar: selfie, portrait, character images, model. */
 export async function deleteFiles(avatarId: string): Promise<void> {
   if (!SAFE_NAME.test(avatarId)) throw new Error(`Invalid avatar id: ${avatarId}`);
   await driver().removeAll(avatarId);

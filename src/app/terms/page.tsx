@@ -20,7 +20,7 @@ export default function TermsPage() {
       intro={
         <>
           <p>
-            Aliike turns a photo and a voice recording into a talking 3D avatar with a personality, at a link you can share. These terms are the agreement
+            Aliike turns a photo into a talking 3D avatar with a voice you pick and a personality you write, at a link you can share. These terms are the agreement
             between you and {SITE.legalName} (&quot;we&quot;, &quot;us&quot;) for using it.
           </p>
           <p>
@@ -43,21 +43,24 @@ export default function TermsPage() {
         </ul>
       </Section>
 
-      <Section title="Your photo, your voice and your avatar">
+      <Section title="Your photo and your avatar">
         <ul>
           <li>
-            <strong>Only yourself, or an adult who agreed.</strong> Make an avatar only from your own face and voice, or from those of a person aged 18 or over
-            who has clearly agreed to it and knows what it will be used for. You confirm this each time you upload a photo or a recording. We may ask you to
-            show that agreement, and we will remove the avatar if that person asks us to.
+            <strong>Only yourself, or an adult who agreed.</strong> Make an avatar only from a photo of yourself, or of a person aged 18 or over who has
+            clearly agreed to it and knows what it will be used for. You confirm this each time you upload a photo. We may ask you to show that agreement,
+            and we will remove the avatar if that person asks us to.
           </li>
           <li>
-            <strong>Your consent.</strong> By uploading a photo or a voice recording you agree that we process the face and the voice in it to make the avatar
-            and let it speak, as the Privacy Policy describes. You can withdraw that agreement at any time by deleting the avatar.
+            <strong>Your consent.</strong> By uploading a photo you agree that we process the face in it to make the avatar, as the Privacy Policy
+            describes. You can withdraw that agreement at any time by deleting the avatar.
           </li>
           <li>
-            <strong>It stays yours.</strong> Your photo, your recording, what you write and the avatar made from them remain yours. You give us permission to
-            store, copy, adapt and process them, to send them to the companies named in the Privacy Policy, and to show the published avatar to anyone who opens
-            its link. That permission covers running Aliike for you and nothing else. It ends when you delete the avatar or your account.
+            <strong>It stays yours.</strong> Your photo, what you write and the avatar made from them remain yours. You give us permission to store, copy,
+            adapt and process them, to send them to the companies named in the Privacy Policy, and to show the published avatar to anyone who opens its
+            link. That permission covers running Aliike for you and nothing else. It ends when you delete the avatar or your account.
+          </li>
+          <li>
+            <strong>The voice is not yours.</strong> Your avatar speaks in a ready-made voice that you pick. We do not record or copy anyone&apos;s voice.
           </li>
           <li>
             <strong>What you add must be yours to add.</strong> The text, links, pictures, videos and products you give your avatar must be yours, or used with

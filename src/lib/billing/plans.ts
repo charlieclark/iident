@@ -44,7 +44,7 @@ export const PLANS: Record<PlanId, Plan> = {
     tagline: "Bring it to life and share it.",
     features: [
       "1 live 3D avatar with its own link",
-      "Speaks in your cloned voice",
+      "Speaks in a voice you choose",
       "300 replies to visitors a month",
       "Cards for your links, products and videos",
       "Custom background",

@@ -44,10 +44,9 @@ describe("persona prompt", () => {
     expect(p).not.toContain("show_items");
   });
 
-  it("says whose voice the avatar speaks with", () => {
+  it("says the voice is not the person's own", () => {
     const sam = { ...DEFAULT_PERSONA, name: "Sam" };
-    expect(buildSystemPrompt(sam)).toContain("in a stock voice Sam picked (not Sam's real voice)");
-    expect(buildSystemPrompt(sam, undefined, true)).toContain("with Sam's look and a clone of their voice speaks");
+    expect(buildSystemPrompt(sam)).toContain("in a ready-made voice Sam picked (not Sam's real voice)");
   });
 
   it("lists the catalog with ids, hosts, prices and notes", () => {

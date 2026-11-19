@@ -5,7 +5,7 @@ import { PCM_SAMPLE_RATE, wholeSamples } from "./pcm";
 export { PCM_SAMPLE_RATE };
 
 /**
- * ElevenLabs: instant voice cloning plus streaming text to speech.
+ * ElevenLabs: streaming text to speech in its ready-made voices.
  *
  * Speech is requested as raw 16-bit PCM so the browser can schedule each
  * chunk the moment it arrives, without waiting for a whole file to decode.
@@ -15,7 +15,7 @@ export { PCM_SAMPLE_RATE };
 
 const API = "https://api.elevenlabs.io";
 
-/** A small, varied set of ElevenLabs default voices for the stock voice picker. */
+/** A small, varied set of ElevenLabs' ready-made voices for creators to pick from. */
 export const ELEVENLABS_VOICES = [
   { id: "SAz9YHcvj6GT2YYXdXww", label: "River (relaxed, neutral)" },
   { id: "EXAVITQu4vr4xnSDxMaL", label: "Sarah (confident)" },
@@ -43,39 +43,6 @@ async function failure(res: Response, what: string) {
     detail = typeof d === "string" ? d : (d?.message ?? d?.status ?? "");
   } catch {}
   return new Error(`ElevenLabs ${what} failed (${res.status})${detail ? `: ${detail}` : ""}`);
-}
-
-/** Creates an Instant Voice Clone and returns its voice id. */
-export async function cloneVoice(params: {
-  name: string;
-  audio: Uint8Array;
-  filename: string;
-  contentType: string;
-  description?: string;
-}): Promise<string> {
-  const form = new FormData();
-  form.set("name", params.name.slice(0, 100));
-  form.append("files", new Blob([new Uint8Array(params.audio)], { type: params.contentType }), params.filename);
-  // Browser recordings already go through noise suppression; ElevenLabs notes
-  // that isolating clean audio again can make a clone worse.
-  form.set("remove_background_noise", "false");
-  if (params.description) form.set("description", params.description.slice(0, 500));
-  const res = await fetch(`${API}/v1/voices/add`, {
-    method: "POST",
-    headers: { "xi-api-key": apiKey() },
-    body: form,
-  });
-  if (!res.ok) throw await failure(res, "voice cloning");
-  return ((await res.json()) as { voice_id: string }).voice_id;
-}
-
-/** Frees the voice slot used by a clone. Missing voices are ignored. */
-export async function deleteVoice(voiceId: string) {
-  const res = await fetch(`${API}/v1/voices/${encodeURIComponent(voiceId)}`, {
-    method: "DELETE",
-    headers: { "xi-api-key": apiKey() },
-  });
-  if (!res.ok && res.status !== 404) throw await failure(res, "voice deletion");
 }
 
 type SpeechRequest = {

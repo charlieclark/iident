@@ -7,25 +7,21 @@ import { query } from "./pg";
 import { deleteFiles } from "./storage";
 import { dropCached } from "./avatarFiles";
 import { deleteFalCopies } from "./falLinks";
-import { freeClone } from "./voice";
 
 /**
  * Deleting: an avatar, or an account with everything in it.
  *
- * An avatar holds a person's face and voice, so deleting it removes all of
- * it: the selfie, the portrait and drawings made from it, the 3D model, the
- * voice recording, the voice clone at the speech provider, the record, and
- * the CDN's cached copies of the model. A visitor's browser that already
- * loaded the model keeps its own copy; nothing can reach that.
- * Copies held for processing by the image service expire there on its own
- * schedule (see the privacy page).
+ * An avatar holds a person's face, so deleting it removes all of it: the
+ * selfie, the portrait and drawings made from it, the 3D model, the record,
+ * the copies the image service holds, and the CDN's cached copies of the
+ * model. A visitor's browser that already loaded the model keeps its own
+ * copy; nothing can reach that.
  */
 export async function deleteAvatar(id: string): Promise<boolean> {
   const record = await getAvatar(id);
   if (!record) return false;
   // The record goes first: from that moment the page, the chat and the files are unreachable.
   await deleteAvatarRow(id);
-  freeClone(record.voice);
   await deleteFiles(id).catch((err) => console.warn(`[delete ${id}] files left behind:`, err));
   // The 3D model and thumbnail are public and cached by the CDN; its copies go too.
   await dropCached(id);

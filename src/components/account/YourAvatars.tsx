@@ -190,7 +190,7 @@ export function YourAvatars() {
                       </div>
                       {confirming === a.id && (
                         <div className="mt-3 rounded-2xl bg-red-50 p-3 text-sm text-red-900">
-                          <p>Delete this avatar with its photo, voice recording and 3D model? This can&apos;t be undone.</p>
+                          <p>Delete this avatar with its photo and 3D model? This can&apos;t be undone.</p>
                           <div className="mt-2 flex gap-2">
                             <Button size="sm" variant="dark" loading={deleting} onClick={() => remove(a.id)}>
                               Delete for good
@@ -212,7 +212,7 @@ export function YourAvatars() {
         <section className="mt-12 border-t border-ink-100 pt-6">
           <h2 className="text-sm font-semibold text-ink-900">Delete your account</h2>
           <p className="mt-1 max-w-xl text-sm text-ink-600">
-            Removes your account and every avatar in it, with their photos, voice recordings and 3D models, and ends your plan now. This can&apos;t be undone.
+            Removes your account and every avatar in it, with their photos and 3D models, and ends your plan now. This can&apos;t be undone.
           </p>
           {confirming === "account" ? (
             <div className="mt-3 flex flex-wrap items-center gap-2">
